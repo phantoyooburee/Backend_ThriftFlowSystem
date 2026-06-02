@@ -1,0 +1,21 @@
+{
+  "ConnectionStrings": {
+    "DBContext": "Host=localhost;Port=YOUR_PORT;Database=ThriftFlowDb;Username=postgres;Password=YOUR_PASSWORD_HERE;"
+  },
+  "Jwt": {
+    "Key": "YOUR_SUPER_SECRET_JWT_KEY_HERE_1234567890",
+    "Issuer": "Thr1ftFlowInventoryPos@API",
+    "Audience": "Thr1ftFlowInventoryPos@Frontend",
+    "ExpiresMinutes": 480
+    "Email:Port": "587",
+    "Email:Password": "YOUR_EMAIL_PASSWORD",
+    "Email:Host": "smtp.gmail.com",
+    "Email:From": "YOUR_EMAIL"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
