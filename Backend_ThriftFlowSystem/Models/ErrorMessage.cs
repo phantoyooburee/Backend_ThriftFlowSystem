@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Backend_ThriftFlowSystem.Models
 {
+    [Table("ErrorMessages")]
     public class ErrorMessage
     {
         [Key]

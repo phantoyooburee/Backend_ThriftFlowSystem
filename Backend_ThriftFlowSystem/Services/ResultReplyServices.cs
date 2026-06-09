@@ -1,20 +1,26 @@
-﻿using Dapper;
-using Microsoft.Extensions.Caching.Memory;
-using Npgsql;
-
+﻿using Backend_ThriftFlowSystem.Data;
 using Backend_ThriftFlowSystem.DTOs;
 using Backend_ThriftFlowSystem.Interfaces;
+using Dapper;
+using Microsoft.Extensions.Caching.Memory;
+using Npgsql;
+using Microsoft.EntityFrameworkCore;
 
 namespace ThriftFlowSystem.Services;
 
 public class ResultReplyServices : IResultReplyServices
 {
+    private readonly ApplicationDbContext _context;
     private readonly IConfiguration _config;
     private readonly IMemoryCache _cache;
     private const string CacheKey = "error_status:all";
 
-    public ResultReplyServices(IConfiguration config, IMemoryCache cache)
+    public ResultReplyServices(
+        IConfiguration config, 
+        IMemoryCache cache,
+        ApplicationDbContext context)
     {
+        _context = context;
         _config = config;
         _cache = cache;
     }
@@ -38,20 +44,26 @@ public class ResultReplyServices : IResultReplyServices
 
     public async Task<ErrorStatus?> ErrorMessage(int errorCode)
     {
-        var connStr = _config.GetConnectionString("DBContext");
+        //var connStr = _config.GetConnectionString("DBContext");
 
-        const string sql = "SELECT ErrorCode, ErrorDesc FROM ErrorMessages";
+        //const string sql = "SELECT ErrorCode, ErrorDesc FROM ErrorMessages";
 
         var allErrors = await _cache.GetOrCreateAsync(CacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
 
             // use NpgsqlConnection( PostgreSQL ADO.NET provider) to connect to the database and query the error messages)
-            using var connection = new NpgsqlConnection(connStr);
-            await connection.OpenAsync();
-
-
-            var rows = await connection.QueryAsync<ErrorStatus>(sql);
+            //using var connection = new NpgsqlConnection(connStr);
+            //await connection.OpenAsync();
+            //var rows = await connection.QueryAsync<ErrorStatus>(sql);
+            //var rows = await _context.ErrorMessages.ToListAsync();
+            var rows = await _context.ErrorMessages
+                .Select(e => new ErrorStatus
+                {
+                    ErrorCode = e.ErrorCode,
+                    ErrorDesc = e.ErrorDesc
+                })
+                .ToListAsync();
 
             return rows.ToDictionary(r => r.ErrorCode, r => r);
         });

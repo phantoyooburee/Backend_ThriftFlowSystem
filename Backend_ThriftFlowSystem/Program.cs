@@ -2,6 +2,8 @@
 // import from System.Configuration; // Not needed in .NET Core, configuration is handled differently
 using Backend_ThriftFlowSystem.Data;
 using Backend_ThriftFlowSystem.Interfaces;
+using Backend_ThriftFlowSystem.Services;
+using Backend_ThriftFlowSystem.Utils;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -55,7 +57,10 @@ builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<IResultReplyServices, ResultReplyServices>();
-
+builder.Services.AddScoped<ITokenServices, GetTokenJWT>();
+builder.Services.AddScoped<IEmailServices, EmailServices>();
+//Page
+builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
 
 
 //Swagger
