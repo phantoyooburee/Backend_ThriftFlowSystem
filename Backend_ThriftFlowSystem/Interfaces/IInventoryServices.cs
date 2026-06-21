@@ -8,28 +8,28 @@ namespace Backend_ThriftFlowSystem.Interfaces
         // Category
         Task<ResultListReply> GetCategoriesAsync();
         Task<ResultListReply> CreateCategoryAsync(CategoryCreateRequest request, int employeeId);
-        Task<ResultListReply> UpdateCategoryAsync(int id, CategoryUpdateRequest request, int employeeId);
-        Task<ResultListReply> ToggleCategoryActiveAsync(int id, int employeeId);
+        Task<ResultListReply> UpdateCategoryAsync(int id, CategoryUpdateRequest request, int employeeId, string pin);
+        Task<ResultListReply> ToggleCategoryActiveAsync(int id, int employeeId, string pin);
 
         // Supplier
         Task<ResultListReply> GetSuppliersAsync();
         Task<ResultListReply> CreateSupplierAsync(SupplierCreateRequest request, int employeeId);
-        Task<ResultListReply> UpdateSupplierAsync(int id, SupplierUpdateRequest request, int employeeId);
-        Task<ResultListReply> ToggleSupplierActiveAsync(int id, int employeeId);
+        Task<ResultListReply> UpdateSupplierAsync(int id, SupplierUpdateRequest request, int employeeId, string pin);
+        Task<ResultListReply> ToggleSupplierActiveAsync(int id, int employeeId, string pin);
 
         // ProductLot
         Task<ResultListReply> GetProductLotsAsync();
         Task<ResultListReply> CreateProductLotAsync(ProductLotCreateRequest request, int employeeId);
-        Task<ResultListReply> UpdateProductLotAsync(int id, ProductLotUpdateRequest request, int employeeId);
-        Task<ResultListReply> ToggleProductLotActiveAsync(int id, int employeeId);
+        Task<ResultListReply> UpdateProductLotAsync(int id, ProductLotUpdateRequest request, int employeeId, string pin);
+        Task<ResultListReply> ToggleProductLotActiveAsync(int id, int employeeId, string pin);
 
         // Product
         Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null);
         Task<ResultListReply> CreateProductAsync(ProductCreateRequest request, int employeeId);
-        Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId);
-        Task<ResultListReply> ToggleProductActiveAsync(int id, int employeeId);
+        Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId, string pin);
+        Task<ResultListReply> ToggleProductActiveAsync(int id, int employeeId, string pin);
 
         // Adjustment
-        Task<ResultListReply> AdjustStockAsync(StockAdjustRequest request, int employeeId);
+        Task<ResultListReply> AdjustStockAsync(StockAdjustRequest request, int employeeId, string pin);
     }
 }
