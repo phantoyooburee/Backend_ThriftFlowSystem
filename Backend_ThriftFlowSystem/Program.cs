@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Supabase;
 using System.Text;
 using ThriftFlowSystem.Services;
 
@@ -23,6 +24,16 @@ var connectionString = builder.Configuration.GetConnectionString("DBContext")
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DBContext")));
 
+//Connect Supabase Storage (for file uploads)
+var supabaseUrl = builder.Configuration["Supabase:Url"]
+    ?? throw new InvalidOperationException("Supabase URL not found in configuration.");
+var supabaseKey = builder.Configuration["Supabase:Key"]
+    ?? throw new InvalidOperationException("Supabase Key not found in configuration.");
+var supabaseOptions = new SupabaseOptions
+{
+    AutoConnectRealtime = false
+};
+builder.Services.AddScoped<Supabase.Client>(_ => new Supabase.Client (supabaseUrl, supabaseKey, supabaseOptions));
 //Set up JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("JWT secret key not found in configuration.");
@@ -61,7 +72,7 @@ builder.Services.AddScoped<ITokenServices, GetTokenJWT>();
 builder.Services.AddScoped<IEmailServices, EmailServices>();
 //Page
 builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
-
+builder.Services.AddScoped<IInventoryServices, InventoryServices>();
 
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -98,6 +109,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+//middleware for global exception handling
+app.UseMiddleware<Backend_ThriftFlowSystem.Middlewares.ExceptionMiddleware>();
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

@@ -3,6 +3,7 @@ using System;
 using Backend_ThriftFlowSystem.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,13 +12,15 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend_ThriftFlowSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260613114851_FinalizeInventory")]
+    partial class FinalizeInventory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.17")
+                .HasAnnotation("ProductVersion", "9.0.16")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -78,11 +81,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Prefix")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)");
 
                     b.HasKey("Id");
 
@@ -217,9 +215,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("EmployeeId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Note")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
@@ -231,8 +226,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
 
                     b.HasIndex("ProductId");
 
@@ -408,44 +401,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.ToTable("Suppliers");
                 });
 
-            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ActionType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Details")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<int>("EmployeeId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("TargetRecordId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("TargetTable")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("EmployeeId");
-
-                    b.ToTable("SystemActionLogs");
-                });
-
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.AuthLog", b =>
                 {
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
@@ -468,19 +423,11 @@ namespace Backend_ThriftFlowSystem.Migrations
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.InventoryLog", b =>
                 {
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Backend_ThriftFlowSystem.Models.Product", "Product")
                         .WithMany()
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Employee");
 
                     b.Navigation("Product");
                 });
@@ -522,17 +469,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasForeignKey("SupplierId");
 
                     b.Navigation("Supplier");
-                });
-
-            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>
-                {
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Category", b =>
