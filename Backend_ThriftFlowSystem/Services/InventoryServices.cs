@@ -3,6 +3,7 @@ using Backend_ThriftFlowSystem.DTOs;
 using Backend_ThriftFlowSystem.Interfaces;
 using Backend_ThriftFlowSystem.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Net.NetworkInformation;
 
 namespace Backend_ThriftFlowSystem.Services
 {
@@ -143,11 +144,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> UpdateCategoryAsync(int id, CategoryUpdateRequest request, int employeeId)
+        public async Task<ResultListReply> UpdateCategoryAsync(int id, CategoryUpdateRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var category = await _context.Categories.FindAsync(id);
                 if (category == null)
                 {
@@ -214,11 +221,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> ToggleCategoryActiveAsync(int id, int employeeId)
+        public async Task<ResultListReply> ToggleCategoryActiveAsync(int id, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var category = await _context.Categories.FindAsync(id);
                 if (category == null)
                 {
@@ -352,11 +365,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> UpdateSupplierAsync(int id, SupplierUpdateRequest request, int employeeId)
+        public async Task<ResultListReply> UpdateSupplierAsync(int id, SupplierUpdateRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var supplier = await _context.Suppliers.FindAsync(id);
                 if (supplier == null)
                 {
@@ -423,11 +442,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> ToggleSupplierActiveAsync(int id, int employeeId)
+        public async Task<ResultListReply> ToggleSupplierActiveAsync(int id, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var supplier = await _context.Suppliers.FindAsync(id);
 
                 if (supplier == null)
@@ -572,11 +597,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> UpdateProductLotAsync(int id, ProductLotUpdateRequest request, int employeeId)
+        public async Task<ResultListReply> UpdateProductLotAsync(int id, ProductLotUpdateRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var lot = await _context.ProductLots.FindAsync(id);
                 if (lot == null)
                 {
@@ -655,11 +686,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> ToggleProductLotActiveAsync(int id, int employeeId)
+        public async Task<ResultListReply> ToggleProductLotActiveAsync(int id, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var lot = await _context.ProductLots.FindAsync(id);
                 if (lot == null)
                 {
@@ -676,7 +713,7 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.SystemActionLogs.Add(new SystemActionLog
                 {
                     EmployeeId = employeeId,
-                    ActionType = lot.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete, // ✅
+                    ActionType = lot.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete, 
                     TargetTable = "ProductLots",
                     TargetRecordId = id,
                     Details = $"Changed status of Product Lot ID {id} {lot.LotName} to {statusText}"
@@ -873,11 +910,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId)
+        public async Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var product = await _context.Products.FindAsync(id);
                 if (product == null)
                 {
@@ -973,11 +1016,17 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> ToggleProductActiveAsync(int id, int employeeId)
+        public async Task<ResultListReply> ToggleProductActiveAsync(int id, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 var product = await _context.Products.FindAsync(id);
                 if (product == null)
                 {
@@ -1022,11 +1071,17 @@ namespace Backend_ThriftFlowSystem.Services
         }
 
         // Adjust Stock Service
-        public async Task<ResultListReply> AdjustStockAsync(StockAdjustRequest request, int employeeId)
+        public async Task<ResultListReply> AdjustStockAsync(StockAdjustRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
             try
             {
+                if (!await IsPinValid(employeeId, pin))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid PIN. Permission denied.";
+                    return reply;
+                }
                 string incomingAction = request.ActionType.ToUpper().Trim();
                 if (!ActionTypes.ValidAdjustActions.Contains(incomingAction))
                 {
@@ -1092,6 +1147,17 @@ namespace Backend_ThriftFlowSystem.Services
                 reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
             }
             return reply;
+        }
+
+        private async Task<bool> IsPinValid(int employeeId, string? inputPin)
+        {
+            if (string.IsNullOrEmpty(inputPin)) return false;
+
+            var employee = await _context.Employees.FindAsync(employeeId);
+            if (employee == null || string.IsNullOrEmpty(employee.PinHash))
+                return false;
+
+            return BCrypt.Net.BCrypt.Verify(inputPin, employee.PinHash);
         }
     }
 }

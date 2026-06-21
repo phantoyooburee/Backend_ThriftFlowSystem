@@ -63,12 +63,12 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
         [HttpPut("categories/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> UpdateCategory(int id, [FromBody] CategoryUpdateRequest request)
+        public async Task<IActionResult> UpdateCategory(int id, [FromBody] CategoryUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
-                var result = await _inventoryServices.UpdateCategoryAsync(id, request, GetCurrentEmployeeId());
+                var result = await _inventoryServices.UpdateCategoryAsync(id, request, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -79,11 +79,11 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPatch("categories/{id}/toggle-active")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> ToggleCategoryActive(int id)
+        public async Task<IActionResult> ToggleCategoryActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
-                var result = await _inventoryServices.ToggleCategoryActiveAsync(id, GetCurrentEmployeeId());
+                var result = await _inventoryServices.ToggleCategoryActiveAsync(id, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
 
             }
@@ -129,12 +129,12 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
         [HttpPut("suppliers/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> UpdateSupplier(int id, [FromBody] SupplierUpdateRequest request)
+        public async Task<IActionResult> UpdateSupplier(int id, [FromBody] SupplierUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
-                var result = await _inventoryServices.UpdateSupplierAsync(id, request, GetCurrentEmployeeId());
+                var result = await _inventoryServices.UpdateSupplierAsync(id, request, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -145,11 +145,11 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPatch("suppliers/{id}/toggle-active")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> ToggleSupplierActive(int id)
+        public async Task<IActionResult> ToggleSupplierActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
-                var result = await _inventoryServices.ToggleSupplierActiveAsync(id, GetCurrentEmployeeId());
+                var result = await _inventoryServices.ToggleSupplierActiveAsync(id, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -194,12 +194,12 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPut("product-lots/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> UpdateProductLot(int id, [FromBody] ProductLotUpdateRequest request)
+        public async Task<IActionResult> UpdateProductLot(int id, [FromBody] ProductLotUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
-                var result = await _inventoryServices.UpdateProductLotAsync(id, request, GetCurrentEmployeeId());
+                var result = await _inventoryServices.UpdateProductLotAsync(id, request, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -210,11 +210,11 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPatch("product-lots/{id}/toggle-active")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> ToggleProductLotActive(int id)
+        public async Task<IActionResult> ToggleProductLotActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
-                var result = await _inventoryServices.ToggleProductLotActiveAsync(id, GetCurrentEmployeeId());
+                var result = await _inventoryServices.ToggleProductLotActiveAsync(id, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -260,12 +260,12 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPut("products/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> UpdateProduct(int id, [FromForm] ProductUpdateRequest request) // ใช้ FromForm รับรูป
+        public async Task<IActionResult> UpdateProduct(int id, [FromForm] ProductUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin) // ใช้ FromForm รับรูป
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
-                var result = await _inventoryServices.UpdateProductAsync(id, request, GetCurrentEmployeeId());
+                var result = await _inventoryServices.UpdateProductAsync(id, request, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -276,11 +276,11 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPatch("products/{id}/toggle-active")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> ToggleProductActive(int id)
+        public async Task<IActionResult> ToggleProductActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
             {
-                var result = await _inventoryServices.ToggleProductActiveAsync(id, GetCurrentEmployeeId());
+                var result = await _inventoryServices.ToggleProductActiveAsync(id, GetCurrentEmployeeId(), pin);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
@@ -291,7 +291,7 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPost("adjust-stock")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> AdjustStock([FromBody] StockAdjustRequest request)
+        public async Task<IActionResult> AdjustStock([FromBody] StockAdjustRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             var employeeIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(employeeIdClaim) || !int.TryParse(employeeIdClaim, out int employeeId))
@@ -299,7 +299,7 @@ namespace Backend_ThriftFlowSystem.Controllers
                 return Unauthorized(new { message = "Invalid Employee Token" });
             }
 
-            var reply = await _inventoryServices.AdjustStockAsync(request, employeeId);
+            var reply = await _inventoryServices.AdjustStockAsync(request, employeeId, pin);
 
             if (reply.Result.Code == "200")
             {
