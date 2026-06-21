@@ -17,7 +17,7 @@ namespace Backend_ThriftFlowSystem.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.16")
+                .HasAnnotation("ProductVersion", "9.0.17")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -61,6 +61,32 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("AuthLogs");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Category", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Prefix")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Categories");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Employee", b =>
@@ -172,7 +198,45 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.HasKey("ErrorCode");
 
-                    b.ToTable("ErrorMessages");
+                    b.ToTable("ErrorMessages", (string)null);
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.InventoryLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityChanged")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("InventoryLogs");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.PasswordResetToken", b =>
@@ -203,6 +267,97 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.ToTable("PasswordResetTokens");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Product", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CategoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsGenericSKU")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("ProductLotId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("QuantityInStock")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SKU")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<decimal>("SellingPrice")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("ProductLotId");
+
+                    b.HasIndex("SKU")
+                        .IsUnique();
+
+                    b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.ProductLot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ColorTag")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LotName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTime>("ReceivedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("SupplierId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalLotCost")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SupplierId");
+
+                    b.ToTable("ProductLots");
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Role", b =>
                 {
                     b.Property<int>("Id")
@@ -225,6 +380,72 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.ToTable("Roles");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Supplier", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactInfo")
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Suppliers");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TargetRecordId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetTable")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("SystemActionLogs");
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.AuthLog", b =>
                 {
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
@@ -245,6 +466,25 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.InventoryLog", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.PasswordResetToken", b =>
                 {
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
@@ -254,6 +494,60 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Product", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Category", "Category")
+                        .WithMany("Products")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.ProductLot", "ProductLot")
+                        .WithMany("Products")
+                        .HasForeignKey("ProductLotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+
+                    b.Navigation("ProductLot");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.ProductLot", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Supplier", "Supplier")
+                        .WithMany("ProductLots")
+                        .HasForeignKey("SupplierId");
+
+                    b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Category", b =>
+                {
+                    b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.ProductLot", b =>
+                {
+                    b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Supplier", b =>
+                {
+                    b.Navigation("ProductLots");
                 });
 #pragma warning restore 612, 618
         }

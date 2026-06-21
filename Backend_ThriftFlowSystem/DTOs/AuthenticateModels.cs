@@ -6,7 +6,7 @@ namespace Backend_ThriftFlowSystem.DTOs
     public class AuthenticateModels
     {
 
-        // 1. DTO for Owner Create system (SetupOwnerRequest)
+        // DTO for Owner Create system (SetupOwnerRequest)
 
         public class SetupOwnerRequest
         {
@@ -40,7 +40,7 @@ namespace Backend_ThriftFlowSystem.DTOs
             public string? LastName { get; set; }
         }
 
-        // 2. DTO for Owner Invite Employee (InviteEmployeeRequest)
+        // DTO for Owner Invite Employee (InviteEmployeeRequest)
         public class InviteEmployeeRequest
         {
             [Required(ErrorMessage = "Email is required"), EmailAddress(ErrorMessage = "Email format is incorrect.")]
