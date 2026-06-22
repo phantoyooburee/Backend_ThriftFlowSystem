@@ -5,7 +5,8 @@ namespace Backend_ThriftFlowSystem.Interfaces
 {
     public interface IAuthenticateServices
     {
-        Task<ResultListReply> SetupOwnerAsync(SetupOwnerRequest request);
+        //Task<ResultListReply> SetupOwnerAsync(SetupOwnerRequest request);
+        Task<ResultListReply> GetInvitationDetailsAsync(string token);
         Task<ResultListReply> InviteEmployeeAsync(InviteEmployeeRequest request, int inviterId);
         Task<ResultListReply> RegisterAsync(RegisterRequest request);
         Task<ResultListReply> LoginAsync(LoginRequest request);

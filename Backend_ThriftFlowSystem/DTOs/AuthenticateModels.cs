@@ -8,37 +8,37 @@ namespace Backend_ThriftFlowSystem.DTOs
 
         // DTO for Owner Create system (SetupOwnerRequest)
 
-        public class SetupOwnerRequest
-        {
-            [Required(ErrorMessage = "Username is required")]
-            [StringLength(50), RegularExpression(@"^[A-Za-z0-9._-]{3,50}$",
-             ErrorMessage = "Username must be 3–50 chars using letters, numbers, dot, underscore, or hyphen.")]
-            [DefaultValue("Owner.Admin")]
-            public string? Username { get; set; }
+        //public class SetupOwnerRequest
+        //{
+        //    [Required(ErrorMessage = "Username is required")]
+        //    [StringLength(50), RegularExpression(@"^[A-Za-z0-9._-]{3,50}$",
+        //     ErrorMessage = "Username must be 3–50 chars using letters, numbers, dot, underscore, or hyphen.")]
+        //    [DefaultValue("Owner.Admin")]
+        //    public string? Username { get; set; }
 
-            [Required(ErrorMessage = "Email is required"), EmailAddress(
-            ErrorMessage = "Email format is incorrect."), StringLength(100)]
-            public string? Email { get; set; }
+        //    [Required(ErrorMessage = "Email is required"), EmailAddress(
+        //    ErrorMessage = "Email format is incorrect."), StringLength(100)]
+        //    public string? Email { get; set; }
 
-            [Required, RegularExpression(
-            @"^[a-zA-Z0-9!@#$%^&*()_\-+=\[{\]};:'"",<.>/?\\|`~]{8,}$", ErrorMessage = "Password must be at least 8 characters and contain only letters, numbers, and special characters (!@#$%^&* etc.) ")]
-            public string? Password { get; set; }
+        //    [Required, RegularExpression(
+        //    @"^[a-zA-Z0-9!@#$%^&*()_\-+=\[{\]};:'"",<.>/?\\|`~]{8,}$", ErrorMessage = "Password must be at least 8 characters and contain only letters, numbers, and special characters (!@#$%^&* etc.) ")]
+        //    public string? Password { get; set; }
 
-            [Required(ErrorMessage = "PIN is required")]
-            [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
+        //    [Required(ErrorMessage = "PIN is required")]
+        //    [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
             
-            public string? Pin { get; set; }
+        //    public string? Pin { get; set; }
 
-            [StringLength(100)]
-            [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "First name can contain letter only.")]
-            [DefaultValue("Jadap")]
-            public string? FirstName { get; set; }
+        //    [StringLength(100)]
+        //    [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "First name can contain letter only.")]
+        //    [DefaultValue("Jadap")]
+        //    public string? FirstName { get; set; }
 
-            [StringLength(100)]
-            [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "Last name can contain letters only.")]
-            [DefaultValue("Kumpao")]
-            public string? LastName { get; set; }
-        }
+        //    [StringLength(100)]
+        //    [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "Last name can contain letters only.")]
+        //    [DefaultValue("Kumpao")]
+        //    public string? LastName { get; set; }
+        //}
 
         // DTO for Owner Invite Employee (InviteEmployeeRequest)
         public class InviteEmployeeRequest
@@ -52,8 +52,12 @@ namespace Backend_ThriftFlowSystem.DTOs
 
         public class RegisterRequest
         {
-            [Required(ErrorMessage = "Invitation token is required")]
+            //[Required(ErrorMessage = "Invitation token is required")]
             public string? InvitationToken { get; set; }
+
+            [EmailAddress(
+            ErrorMessage = "Email format is incorrect."), StringLength(150)]
+            public string? Email { get; set; }
 
             [Required(ErrorMessage = "Username is required")]
             [StringLength(50), RegularExpression(@"^[A-Za-z0-9._-]{3,50}$",
