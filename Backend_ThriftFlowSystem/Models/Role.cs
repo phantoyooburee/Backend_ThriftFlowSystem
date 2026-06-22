@@ -15,5 +15,6 @@ namespace Backend_ThriftFlowSystem.Models
 
         [MaxLength(255)]
         public string? Description { get; set; }
+        public int Level { get; set; }
     }
 }

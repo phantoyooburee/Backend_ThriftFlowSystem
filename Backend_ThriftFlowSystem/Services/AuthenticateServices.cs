@@ -40,93 +40,120 @@ namespace Backend_ThriftFlowSystem.Services
       
         // 1. Create Owner first time
         
-        public async Task<ResultListReply> SetupOwnerAsync(SetupOwnerRequest request)
-        {
-            var reply = new ResultListReply();
-            try
-            {
-                // Check if any employee exists in the system
-                if (await _context.Employees.AnyAsync())
-                {
-                    var logFail = new AuthLog
-                    {
-                        EmployeeId = null, // No EMP yet
-                        TargetEmail = request.Email,
-                        Action = "SETUP_OWNER_FAILED",
-                        Details = $"Attempt to setup owner with email: {request.Email} but system already has employees."
-                    };
-                    _context.AuthLogs.Add(logFail);
-                    await _context.SaveChangesAsync();
+        //public async Task<ResultListReply> SetupOwnerAsync(SetupOwnerRequest request)
+        //{
+        //    var reply = new ResultListReply();
+        //    try
+        //    {
+        //        // Check if any employee exists in the system
+        //        if (await _context.Employees.AnyAsync())
+        //        {
+        //            var logFail = new AuthLog
+        //            {
+        //                EmployeeId = null, // No EMP yet
+        //                TargetEmail = request.Email,
+        //                Action = "SETUP_OWNER_FAILED",
+        //                Details = $"Attempt to setup owner with email: {request.Email} but system already has employees."
+        //            };
+        //            _context.AuthLogs.Add(logFail);
+        //            await _context.SaveChangesAsync();
 
-                    reply.Result.ToErrorStatus();
-                    reply.Data = "System owner already exists. Cannot setup again.";
-                    return reply;
-                }
+        //            reply.Result.ToErrorStatus();
+        //            reply.Data = "System owner already exists. Cannot setup again.";
+        //            return reply;
+        //        }
 
-                // BCrypy Password and PIN
-                string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-                string pinHash = BCrypt.Net.BCrypt.HashPassword(request.Pin);
+        //        // BCrypy Password and PIN
+        //        string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        //        string pinHash = BCrypt.Net.BCrypt.HashPassword(request.Pin);
 
-                var newOwner = new Employee
-                {
-                    RoleId = 1, // Rolesname is only Owner
-                    Username = request.Username!.ToLower().Trim(),
-                    Email = request.Email!.ToLower().Trim(),
-                    PasswordHash = passwordHash,
-                    PinHash = pinHash,
-                    FirstName = request.FirstName ?? string.Empty,
-                    LastName = request.LastName ?? string.Empty,
-                    IsFirstLogin = false, // Owner not setting more
-                    IsActive = true
-                };
-                _context.Employees.Add(newOwner);
-                await _context.SaveChangesAsync();
+        //        var newOwner = new Employee
+        //        {
+        //            RoleId = 1, // Rolesname is only Owner
+        //            Username = request.Username!.ToLower().Trim(),
+        //            Email = request.Email!.ToLower().Trim(),
+        //            PasswordHash = passwordHash,
+        //            PinHash = pinHash,
+        //            FirstName = request.FirstName ?? string.Empty,
+        //            LastName = request.LastName ?? string.Empty,
+        //            IsFirstLogin = false, // Owner not setting more
+        //            IsActive = true
+        //        };
+        //        _context.Employees.Add(newOwner);
+        //        await _context.SaveChangesAsync();
 
-                var logSuccess = new AuthLog
-                {
-                    EmployeeId = newOwner.Id,
-                    TargetEmail = newOwner.Email,
-                    Action = "SETUP_OWNER_SUCCESS",
-                    Details = $"Owner account created with email: {newOwner.Email}"
-                };
-                _context.AuthLogs.Add(logSuccess);
-                await _context.SaveChangesAsync();
+        //        var logSuccess = new AuthLog
+        //        {
+        //            EmployeeId = newOwner.Id,
+        //            TargetEmail = newOwner.Email,
+        //            Action = "SETUP_OWNER_SUCCESS",
+        //            Details = $"Owner account created with email: {newOwner.Email}"
+        //        };
+        //        _context.AuthLogs.Add(logSuccess);
+        //        await _context.SaveChangesAsync();
 
-                reply.Result.ToSuccessStatus("201");
-                reply.Data = "Owner account created successfully.";
-                reply.ToSuccessStatus();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An error occurred during SetupOwnerAsync.");
-                reply.Result.ToErrorStatus();
-                reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected internal server error occurred";
-            }
-            return reply;
-        }
+        //        reply.Result.ToSuccessStatus("201");
+        //        reply.Data = "Owner account created successfully.";
+        //        reply.ToSuccessStatus();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "An error occurred during SetupOwnerAsync.");
+        //        reply.Result.ToErrorStatus();
+        //        reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected internal server error occurred";
+        //    }
+        //    return reply;
+        //}
 
         public async Task<ResultListReply> InviteEmployeeAsync(InviteEmployeeRequest request, int inviterId)
         {
             var reply = new ResultListReply();
             try
             {
+
+                var inviter = await _context.Employees
+                .Include(e => e.Role)
+                .FirstOrDefaultAsync(e => e.Id == inviterId);
+
+                var targetRole = await _context.Roles.FindAsync(request.RoleId);
+
+                if (inviter?.Role == null || targetRole == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Inviter role or Target role data is missing.";
+                    return reply;
+                }
+
+                if (inviter.Role.Level != 1 && inviter.Role.Level >= targetRole.Level)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "You do not have permission to invite this role.";
+                    return reply;
+                }
+
                 string email = request.Email!.ToLower().Trim();
 
+                bool isAlreadyEmployee = await _context.Employees.AnyAsync(e => e.Email == email);
+                bool isAlreadyInvited = await _context.EmployeeInvitations.AnyAsync(i => i.Email == email && !i.IsUsed);
                 // Check exit email emp
-                if (await _context.Employees.AnyAsync(e => e.Email == email))
+                if (isAlreadyEmployee || isAlreadyInvited)
                 {
                     var logFail = new AuthLog
                     {
                         EmployeeId = inviterId,
                         TargetEmail = email,
                         Action = "INVITE_EMPLOYEE_FAILED",
-                        Details = $"Attempt to invite employee with email: {email} but it is already registered."
+                        Details = isAlreadyEmployee
+                                  ? $"Attempt to invite email: {email} but it is already registered."
+                                  : $"Attempt to invite email: {email} but it has a pending invitation."
                     };
                     _context.AuthLogs.Add(logFail);
                     await _context.SaveChangesAsync();
 
                     reply.Result.ToErrorStatus();
-                    reply.Data = "This email is already registered as an employee.";
+                    reply.Data = isAlreadyEmployee
+                                 ? "This email is already registered as an employee."
+                                 : "This email already has a pending invitation.";
                     return reply;
                 }
 
@@ -138,7 +165,8 @@ namespace Backend_ThriftFlowSystem.Services
                     RoleId = request.RoleId,
                     InvitationToken = invitationToken,
                     ExpiresAt = DateTime.UtcNow.AddHours(24), // Expire link 24 Hr.
-                    IsUsed = false
+                    IsUsed = false,
+                    InvitedByEmployeeId = inviterId
                 };
 
                 _context.EmployeeInvitations.Add(invitation);
@@ -182,39 +210,76 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
+        public async Task<ResultListReply> GetInvitationDetailsAsync(string token)
+        {
+            var reply = new ResultListReply();
+            var invitation = await _context.EmployeeInvitations
+                .FirstOrDefaultAsync(i => i.InvitationToken == token && !i.IsUsed);
+
+            if (invitation == null || invitation.ExpiresAt < DateTime.UtcNow)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "Invalid or expired token.";
+                return reply;
+            }
+
+            reply.Result.ToSuccessStatus();
+            reply.Data = new { invitation.Email, invitation.RoleId };
+            return reply;
+
+        }
+
         public async Task<ResultListReply> RegisterAsync(RegisterRequest request)
         {
             var reply = new ResultListReply();
             try
             {
-                // Check Token
-                var invitation = await _context.EmployeeInvitations
+                bool hasEmployees = await _context.Employees.AnyAsync();
+                EmployeeInvitation? invitation = null;
+                string finalEmail = "";
+                if (hasEmployees)
+                {
+                    // Check Token
+                     invitation = await _context.EmployeeInvitations
                     .FirstOrDefaultAsync(i => i.InvitationToken == request.InvitationToken && !i.IsUsed);
 
-                if (invitation == null || invitation.ExpiresAt < DateTime.UtcNow)
-                {
-                    var logFail = new AuthLog
+                    if (invitation == null || invitation.ExpiresAt < DateTime.UtcNow)
                     {
-                        EmployeeId = null, // No EMP yet
-                        TargetEmail = invitation?.Email ?? "Unknown",
-                        Action = "REGISTER_FAILED",
-                        Details = $"Failed registration attempt with token: {request.InvitationToken}. Token is invalid or expired."
-                    };
-                    _context.AuthLogs.Add(logFail);
-                    await _context.SaveChangesAsync();
+                        var logFail = new AuthLog
+                        {
+                            EmployeeId = null, // No EMP yet
+                            TargetEmail = invitation?.Email ?? "Unknown",
+                            Action = "REGISTER_FAILED",
+                            Details = $"Failed registration attempt with token: {request.InvitationToken}. Token is invalid or expired."
+                        };
+                        _context.AuthLogs.Add(logFail);
+                        await _context.SaveChangesAsync();
 
-                    reply.Result.ToErrorStatus();
-                    reply.Data = "Invalid or expired invitation token.";
-                    return reply;
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Invalid or expired invitation token.";
+                        return reply;
+                    }
+                    finalEmail = invitation.Email;
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(request.Email))
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Email is required for system setup.";
+                        return reply;
+                    }
+                    finalEmail = request.Email.ToLower().Trim();
                 }
 
                 // Check Username Exits
-                if (await _context.Employees.AnyAsync(e => e.Username == request.Username!.ToLower().Trim()))
+                //string emailToCheck = hasEmployees ? invitation!.Email : request.Email!.ToLower().Trim();
+                if (await _context.Employees.AnyAsync(e => e.Username == request.Username!.ToLower().Trim() || e.Email == finalEmail))
                 {
                     var logFail = new AuthLog
                     {
                         EmployeeId = null, // No EMP yet
-                        TargetEmail = invitation.Email,
+                        TargetEmail = finalEmail,
                         Action = "REGISTER_FAILED",
                         Details = $"Failed registration attempt with username: {request.Username} but it is already taken."
                     };
@@ -231,19 +296,25 @@ namespace Backend_ThriftFlowSystem.Services
 
                 var newEmployee = new Employee
                 {
-                    RoleId = invitation.RoleId, 
-                    Email = invitation.Email,   
+                    RoleId = hasEmployees ? invitation!.RoleId : 1,
+                    Email = finalEmail,
                     Username = request.Username!.ToLower().Trim(),
                     PasswordHash = passwordHash,
                     PinHash = pinHash,
                     FirstName = request.FirstName ?? string.Empty,
                     LastName = request.LastName ?? string.Empty,
-                    IsFirstLogin = true
+                    IsFirstLogin = true,
+                    IsActive = true
                 };
 
                 _context.Employees.Add(newEmployee);
-                // Update link was used
-                invitation.IsUsed = true;
+
+                    // Update link was used
+                if (hasEmployees && invitation != null)
+                {
+                    invitation.IsUsed = true;
+                }
+                        
                 await _context.SaveChangesAsync();
 
                 var logSuccess = new AuthLog

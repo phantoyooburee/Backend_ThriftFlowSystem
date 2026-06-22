@@ -1,4 +1,5 @@
 ﻿using Backend_ThriftFlowSystem.Interfaces;
+using Backend_ThriftFlowSystem.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -21,15 +22,31 @@ namespace Backend_ThriftFlowSystem.Controllers
             _resultReply = resultReply;
         }
 
-        [HttpPost("setup-owner")]
+        //[HttpPost("setup-owner")]
+        //[AllowAnonymous]
+        //public async Task<IActionResult> SetupOwner([FromBody] SetupOwnerRequest request)
+        //{
+        //    try
+        //    {
+        //        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        //        var result = await _authenServices.SetupOwnerAsync(request);
+        //        int statusCode = _resultReply.MapReply(result);
+        //        return StatusCode(statusCode, result);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+        //    }
+        //}
+
+        [HttpGet("invitation/{token}")]
         [AllowAnonymous]
-        public async Task<IActionResult> SetupOwner([FromBody] SetupOwnerRequest request)
+        public async Task<IActionResult> GetInvitationDetails(string token)
         {
             try
             {
-                if (!ModelState.IsValid) return BadRequest(ModelState);
-
-                var result = await _authenServices.SetupOwnerAsync(request);
+                var result = await _authenServices.GetInvitationDetailsAsync(token);
                 int statusCode = _resultReply.MapReply(result);
                 return StatusCode(statusCode, result);
             }
@@ -40,16 +57,30 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPost("invite")]
-        [Authorize] 
+        [Authorize]
         public async Task<IActionResult> InviteEmployee([FromBody] InviteEmployeeRequest request)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
-
-                // ดึง Id ของคนที่กดเชิญ ออกมาจาก JWT Token
                 var inviterIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                int.TryParse(inviterIdClaim, out int inviterId);
+                var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (string.IsNullOrEmpty(inviterIdClaim) || !int.TryParse(inviterIdClaim, out int inviterId))
+                {
+                    return Unauthorized(new { message = "Invalid token claims." });
+                }
+                if (roleClaim != "Owner" && roleClaim != "Manager")
+                {
+                    return StatusCode(403, new
+                    {
+                        success = false,
+                        message = "You do not have permission to invite employees. Access Denied."
+                    });
+                }
+                // ดึง Id ของคนที่กดเชิญ ออกมาจาก JWT Token
+                //var inviterIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                //int.TryParse(inviterIdClaim, out int inviterId);
 
                 var result = await _authenServices.InviteEmployeeAsync(request, inviterId);
                 int statusCode = _resultReply.MapReply(result);

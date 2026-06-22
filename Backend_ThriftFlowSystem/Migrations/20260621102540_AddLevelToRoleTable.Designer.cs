@@ -3,6 +3,7 @@ using System;
 using Backend_ThriftFlowSystem.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend_ThriftFlowSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260621102540_AddLevelToRoleTable")]
+    partial class AddLevelToRoleTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -172,9 +175,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int>("InvitedByEmployeeId")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsUsed")
                         .HasColumnType("boolean");
 
@@ -182,11 +182,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("InvitationToken")
-                        .IsUnique();
-
-                    b.HasIndex("InvitedByEmployeeId");
 
                     b.ToTable("EmployeeInvitations");
                 });
@@ -475,17 +470,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .IsRequired();
 
                     b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.EmployeeInvitation", b =>
-                {
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "InvitedBy")
-                        .WithMany()
-                        .HasForeignKey("InvitedByEmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("InvitedBy");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.InventoryLog", b =>
