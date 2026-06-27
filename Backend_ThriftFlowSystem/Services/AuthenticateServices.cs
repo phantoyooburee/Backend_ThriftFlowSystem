@@ -2,10 +2,12 @@
 using Backend_ThriftFlowSystem.DTOs;
 using Backend_ThriftFlowSystem.Interfaces;
 using Backend_ThriftFlowSystem.Models;
-using static Backend_ThriftFlowSystem.DTOs.AuthenticateModels;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json.Linq;
+using static Backend_ThriftFlowSystem.DTOs.AuthenticateModels;
 
 namespace Backend_ThriftFlowSystem.Services
 {
@@ -37,73 +39,75 @@ namespace Backend_ThriftFlowSystem.Services
             _logger  = logger;
         }
 
-      
-        // 1. Create Owner first time
-        
-        //public async Task<ResultListReply> SetupOwnerAsync(SetupOwnerRequest request)
-        //{
-        //    var reply = new ResultListReply();
-        //    try
-        //    {
-        //        // Check if any employee exists in the system
-        //        if (await _context.Employees.AnyAsync())
-        //        {
-        //            var logFail = new AuthLog
-        //            {
-        //                EmployeeId = null, // No EMP yet
-        //                TargetEmail = request.Email,
-        //                Action = "SETUP_OWNER_FAILED",
-        //                Details = $"Attempt to setup owner with email: {request.Email} but system already has employees."
-        //            };
-        //            _context.AuthLogs.Add(logFail);
-        //            await _context.SaveChangesAsync();
+        public async Task<ResultListReply> CheckSystemStatusAsync()
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                bool hasEmployees = await _context.Employees.AnyAsync();
 
-        //            reply.Result.ToErrorStatus();
-        //            reply.Data = "System owner already exists. Cannot setup again.";
-        //            return reply;
-        //        }
+                reply.Result.ToSuccessStatus("200");
+                reply.Data = new { isInitialized = hasEmployees };
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred during CheckSystemStatusAsync.");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected internal server error occurred";
+            }
+            return reply;
+        }
+        public async Task<ResultListReply> GetInvitationDetailsAsync(string token)
+        {
+            var reply = new ResultListReply();
+            var invitation = await _context.EmployeeInvitations
+                .FirstOrDefaultAsync(i => i.InvitationToken == token && !i.IsUsed);
 
-        //        // BCrypy Password and PIN
-        //        string passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
-        //        string pinHash = BCrypt.Net.BCrypt.HashPassword(request.Pin);
+            if (invitation == null || invitation.ExpiresAt < DateTime.UtcNow)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "Invalid or expired token.";
+                return reply;
+            }
 
-        //        var newOwner = new Employee
-        //        {
-        //            RoleId = 1, // Rolesname is only Owner
-        //            Username = request.Username!.ToLower().Trim(),
-        //            Email = request.Email!.ToLower().Trim(),
-        //            PasswordHash = passwordHash,
-        //            PinHash = pinHash,
-        //            FirstName = request.FirstName ?? string.Empty,
-        //            LastName = request.LastName ?? string.Empty,
-        //            IsFirstLogin = false, // Owner not setting more
-        //            IsActive = true
-        //        };
-        //        _context.Employees.Add(newOwner);
-        //        await _context.SaveChangesAsync();
+            reply.Result.ToSuccessStatus();
+            reply.Result.Code = "200";
+            reply.Data = new { invitation.Email, invitation.RoleId };
+            return reply;
 
-        //        var logSuccess = new AuthLog
-        //        {
-        //            EmployeeId = newOwner.Id,
-        //            TargetEmail = newOwner.Email,
-        //            Action = "SETUP_OWNER_SUCCESS",
-        //            Details = $"Owner account created with email: {newOwner.Email}"
-        //        };
-        //        _context.AuthLogs.Add(logSuccess);
-        //        await _context.SaveChangesAsync();
+        }
 
-        //        reply.Result.ToSuccessStatus("201");
-        //        reply.Data = "Owner account created successfully.";
-        //        reply.ToSuccessStatus();
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.LogError(ex, "An error occurred during SetupOwnerAsync.");
-        //        reply.Result.ToErrorStatus();
-        //        reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected internal server error occurred";
-        //    }
-        //    return reply;
-        //}
+        public async Task<ResultListReply> GetProfileAsync(int employeeId)
+        {
+            var reply = new ResultListReply();
+            var employee = await _context.Employees
+            .Include(e => e.Role)
+            .FirstOrDefaultAsync(p => p.Id == employeeId);
+
+            if (employee == null)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "User not found in the System";
+                return reply;
+            }
+
+            reply.Result.ToSuccessStatus();
+            reply.Result.Code = "200";
+            reply.Data = new AuthResponse
+            {
+                Id = employee.Id,
+                Username = employee.Username,
+                Email = employee.Email,
+                FirstName = employee.FirstName,
+                LastName = employee.LastName,
+                RoleName = employee.Role?.RoleName ?? "Unknown",
+                IsFirstLogin = employee.IsFirstLogin
+            };
+
+            return reply;
+
+        }
 
         public async Task<ResultListReply> InviteEmployeeAsync(InviteEmployeeRequest request, int inviterId)
         {
@@ -175,16 +179,57 @@ namespace Backend_ThriftFlowSystem.Services
                 
                 string baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5173";
                 string registerUrl = $"{baseUrl}/register?token={invitationToken}";
-
+                string logoUrl = "https://uiozuuohitbuqdmzbhlm.supabase.co/storage/v1/object/public/Assets/Logo_TF.png?v=1";
+                string logoUrl2 = "https://uiozuuohitbuqdmzbhlm.supabase.co/storage/v1/object/public/Assets/Logo_only_TF.png?v=1";
                 await _email.SendEmailAsync(new ResetPasswordEmail // Can Reuse Model send general email
                 {
                     Recipient = email,
-                    Subject = "Invitation to join ThriftFlow System",
-                    Body = $@"<html>
-                        <p>You have been invited to join the system.</p>
-                        <p><a href=""{registerUrl}"">Click here to register</a></p>
-                        <p>This link will expire in 24 hours.</p>
-                        </html>"
+                    Subject = "You're invited to ThriftFlow System",
+                    Body = $@"
+                    <div style='font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f7f7f9; padding: 40px 0; margin: 0;'>
+                        <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);'>
+                            
+                            <div style='padding: 30px 40px 20px; text-align: left;'>
+                                <img src='{logoUrl}' alt='ThriftFlow' style='width: 150px; height: auto;' />
+                            </div>
+
+                            <div style='background-color: #F8F3EB; padding: 40px; text-align: center; border-top: 1px solid #f0e9dc; border-bottom: 1px solid #f0e9dc;'>
+                                <h1 style='color: #114232; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;'>
+                                    Bring <span style='color: #d4a373;'>ThriftFlow</span> into your workflow
+                                </h1>
+                            </div>
+
+                            <div style='padding: 40px; color: #333333;'>
+                                <p style='font-size: 16px; line-height: 1.6; margin-top: 0;'>Hey there,</p>
+                                <p style='font-size: 16px; line-height: 1.6;'>
+                                    Your team is already optimizing their workflow. Now you can join them.<br><br>
+                                    Starting today, you have been invited to join the <strong>ThriftFlow System</strong>. You will be able to manage inventory, track sales, and flow your preloved items efficiently.
+                                </p>
+
+                                <div style='margin: 35px 0; text-align: center;'>
+                                    <a href='{registerUrl}' style='background-color: #114232; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; display: inline-block;'>Get Started Now</a>
+                                </div>
+
+                                <p style='font-size: 14px; color: #666666; line-height: 1.5; margin-bottom: 0;'>
+                                    Getting started takes about two minutes. Please note that this invitation link will expire in 24 hours.
+                                </p>
+                                <br>
+                                <p style='font-size: 16px; line-height: 1.6; margin-bottom: 0; color: #333333;'>
+                                    Best,<br>The ThriftFlow Team
+                                </p>
+                            </div>
+
+                            <div style='background-color: #ffffff; padding: 30px 40px; text-align: center; border-top: 1px solid #eeeeee;'>
+                                <img src='{logoUrl2}' alt='TF' style='height: 40px; filter: grayscale(100%); opacity: 0.6; margin-bottom: 15px;' />
+                                <p style='color: #999999; font-size: 12px; line-height: 1.5; margin: 0;'>
+                                    Copyright © {DateTime.Now.Year} ThriftFlow, all rights reserved.<br>
+                                    Preloved. Quality. Flow on.<br><br>
+                                    <a href='#' style='color: #999999; text-decoration: underline;'>Help Center</a> | 
+                                    <a href='#' style='color: #999999; text-decoration: underline;'>Privacy Policy</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>"
                 });
 
                 var logSuccess = new AuthLog
@@ -210,24 +255,6 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> GetInvitationDetailsAsync(string token)
-        {
-            var reply = new ResultListReply();
-            var invitation = await _context.EmployeeInvitations
-                .FirstOrDefaultAsync(i => i.InvitationToken == token && !i.IsUsed);
-
-            if (invitation == null || invitation.ExpiresAt < DateTime.UtcNow)
-            {
-                reply.Result.ToErrorStatus();
-                reply.Data = "Invalid or expired token.";
-                return reply;
-            }
-
-            reply.Result.ToSuccessStatus();
-            reply.Data = new { invitation.Email, invitation.RoleId };
-            return reply;
-
-        }
 
         public async Task<ResultListReply> RegisterAsync(RegisterRequest request)
         {
@@ -327,8 +354,24 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.AuthLogs.Add(logSuccess);
                 await _context.SaveChangesAsync();
 
-                reply.Result.ToSuccessStatus("201");
-                reply.Data = "Registration successful.";
+                var assignedRole = await _context.Roles.FindAsync(newEmployee.RoleId);
+                string roleName = assignedRole?.RoleName ?? "Unknown";
+
+                reply.Result.ToSuccessStatus("200");
+
+               
+                reply.Data = new AuthResponse
+                {
+                   
+                    Username = newEmployee.Username,
+                    Email = newEmployee.Email,
+                    FirstName = newEmployee.FirstName,
+                    LastName = newEmployee.LastName,
+                    RoleName = roleName,
+                    IsFirstLogin = newEmployee.IsFirstLogin,
+                    Token = ""
+                };
+
                 reply.ToSuccessStatus();
             }
             catch (Exception ex)
@@ -345,17 +388,20 @@ namespace Backend_ThriftFlowSystem.Services
             var reply = new ResultListReply();
             try
             {
-                // Include Role for RoleName res to Frontend
+                string loginInput = request.Username?.ToLower().Trim() ?? string.Empty;
+
                 var employee = await _context.Employees
-                    .Include(e => e.Role)
-                    .FirstOrDefaultAsync(e => e.Username == request.Username!.ToLower().Trim());
+                .Include(e => e.Role)
+                .FirstOrDefaultAsync(e =>
+                e.Username == loginInput ||
+                e.Email == loginInput);
 
                 if (employee == null || !employee.IsActive ||
                     !BCrypt.Net.BCrypt.Verify(request.Password, employee.PasswordHash))
                 {
                     var logFail = new AuthLog
                     {
-                        EmployeeId = employee?.Id, // Log if EMP found or not
+                        EmployeeId = employee?.Id,
                         TargetEmail  = request.Username,
                         Action = "LOGIN_FAILED",
                         Details = $"Failed login attempt for username: {request.Username}"
@@ -387,7 +433,7 @@ namespace Backend_ThriftFlowSystem.Services
                     Email = employee.Email,
                     FirstName = employee.FirstName,
                     LastName = employee.LastName,
-                    RoleName = employee.Role?.RoleName, // Send back Permission too
+                    RoleName = employee.Role?.RoleName, 
                     IsFirstLogin = employee.IsFirstLogin,
                     Token = token
                 };
@@ -424,8 +470,8 @@ namespace Backend_ThriftFlowSystem.Services
                     _context.AuthLogs.Add(logFail);
                     await _context.SaveChangesAsync();
 
-                    reply.Result.ToSuccessStatus("200");
-                    reply.Data = "If the email exists in our system, a reset link will be sent.";
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Not Found your Email in System.";
                     return reply;
                 }
 
@@ -444,16 +490,54 @@ namespace Backend_ThriftFlowSystem.Services
 
                 string baseUrl = _config["App:BaseUrl"] ?? "http://localhost:5173";
                 string resetUrl = $"{baseUrl}/reset-password?token={tokenPlain}";
-
+                string logoUrl = "https://uiozuuohitbuqdmzbhlm.supabase.co/storage/v1/object/public/Assets/Logo_TF.png?v=1";
+                string logoUrl2 = "https://uiozuuohitbuqdmzbhlm.supabase.co/storage/v1/object/public/Assets/Logo_only_TF.png?v=1";
                 await _email.SendEmailAsync(new ResetPasswordEmail
                 {
                     Recipient = email,
-                    Subject = "Reset Your Password - ThriftFlow System",
-                    Body = $@"<html>
-                        <p>We received a request to reset your password.</p>
-                        <p><a href=""{resetUrl}"">Click here to reset your password</a></p>
-                        <p>This link will expire in 15 minutes.</p>
-                        </html>"
+                    Subject = "Reset your ThriftFlow password",
+                    Body = $@"
+                    <div style='font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Roboto, Helvetica, Arial, sans-serif; background-color: #f7f7f9; padding: 40px 0; margin: 0;'>
+                        <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);'>
+                            
+                            <div style='padding: 30px 40px 20px; text-align: center;'>
+                                <img src='{logoUrl}' alt='ThriftFlow' style='width: 150px; height: auto;' />
+                            </div>
+
+                            <div style='padding: 10px 40px 40px; color: #333333;'>
+                                <h2 style='color: #114232; margin-top: 0; font-size: 24px; font-weight: 700;'>Reset your password</h2>
+                                <p style='font-size: 16px; line-height: 1.6;'>
+                                    We received a request to reset the password for your ThriftFlow account. No worries, it happens to the best of us!
+                                </p>
+                                <p style='font-size: 16px; line-height: 1.6;'>
+                                    Click the button below to choose a new password:
+                                </p>
+
+                                <div style='margin: 35px 0; text-align: center;'>
+                                    <a href='{resetUrl}' style='background-color: #114232; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600; display: inline-block;'>Reset Password</a>
+                                </div>
+
+                                <p style='font-size: 14px; color: #666666; line-height: 1.5; margin-bottom: 0;'>
+                                    If you didn't request a password reset, you can safely ignore this email. Your password won't change until you create a new one.<br><br>
+                                    This link will expire in 15 minutes.
+                                </p>
+                                <br>
+                                <p style='font-size: 16px; line-height: 1.6; margin-bottom: 0; color: #333333;'>
+                                    Best,<br>The ThriftFlow Team
+                                </p>
+                            </div>
+
+                            <div style='background-color: #ffffff; padding: 30px 40px; text-align: center; border-top: 1px solid #eeeeee;'>
+                                <img src='{logoUrl2}' alt='TF' style='height: 40px; filter: grayscale(100%); opacity: 0.6; margin-bottom: 15px;' />
+                                <p style='color: #999999; font-size: 12px; line-height: 1.5; margin: 0;'>
+                                    Copyright © {DateTime.Now.Year} ThriftFlow, all rights reserved.<br>
+                                    Preloved. Quality. Flow on.<br><br>
+                                    <a href='#' style='color: #999999; text-decoration: underline;'>Help Center</a> | 
+                                    <a href='#' style='color: #999999; text-decoration: underline;'>Privacy Policy</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>"
                 });
 
                 var logSuccess = new AuthLog

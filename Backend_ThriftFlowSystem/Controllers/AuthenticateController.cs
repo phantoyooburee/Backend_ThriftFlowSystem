@@ -22,23 +22,24 @@ namespace Backend_ThriftFlowSystem.Controllers
             _resultReply = resultReply;
         }
 
-        //[HttpPost("setup-owner")]
-        //[AllowAnonymous]
-        //public async Task<IActionResult> SetupOwner([FromBody] SetupOwnerRequest request)
-        //{
-        //    try
-        //    {
-        //        if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        //        var result = await _authenServices.SetupOwnerAsync(request);
-        //        int statusCode = _resultReply.MapReply(result);
-        //        return StatusCode(statusCode, result);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
-        //    }
-        //}
+        [HttpGet("system-status")]
+        [AllowAnonymous] 
+        public async Task<IActionResult> CheckSystemStatus()
+        {
+            try
+            {
+                var result = await _authenServices.CheckSystemStatusAsync();
+
+                return Ok(result);
+                
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+            
+        }
 
         [HttpGet("invitation/{token}")]
         [AllowAnonymous]
@@ -54,10 +55,35 @@ namespace Backend_ThriftFlowSystem.Controllers
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
             }
+
+        }
+
+        [HttpGet("Profile")]
+        [Authorize]
+        public async Task<IActionResult> GetProfile()
+        {
+            try
+            {
+                var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                        ?? User.FindFirst("Id")?.Value;
+
+                if (string.IsNullOrEmpty(userIdString) || !int.TryParse(userIdString, out int employeeId))
+                {
+                    return Unauthorized(new { message = "Invalid token payload." });
+                }
+
+                var result = await _authenServices.GetProfileAsync(employeeId);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
         }
 
         [HttpPost("invite")]
-        [Authorize]
+        [Authorize(Roles = "Owner,Manager")]
         public async Task<IActionResult> InviteEmployee([FromBody] InviteEmployeeRequest request)
         {
             try
