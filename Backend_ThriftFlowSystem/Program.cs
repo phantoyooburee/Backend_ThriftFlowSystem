@@ -16,6 +16,15 @@ using ThriftFlowSystem.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Service CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        policy => policy.AllowAnyOrigin()
+                        .AllowAnyMethod()
+                        .AllowAnyHeader());
+});
+
 //Check and retrieve the Connection String (retrieved from the "DBContext" you have set).
 var connectionString = builder.Configuration.GetConnectionString("DBContext")
     ?? throw new InvalidOperationException("Connection string 'DBContext' not found.");
@@ -73,7 +82,9 @@ builder.Services.AddScoped<IEmailServices, EmailServices>();
 //Page
 builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
 builder.Services.AddScoped<IInventoryServices, InventoryServices>();
-
+builder.Services.AddScoped<IPOSServices, POSServices>();
+builder.Services.AddScoped<IPromotionServices, PromotionServices>();
+builder.Services.AddScoped<IDashboardServices, DashboardServices>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
@@ -122,6 +133,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 
