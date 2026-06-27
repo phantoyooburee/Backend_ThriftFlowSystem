@@ -13,7 +13,6 @@ using System.Text;
 using ThriftFlowSystem.Services;
 
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 // Service CORS
@@ -82,9 +81,9 @@ builder.Services.AddScoped<IEmailServices, EmailServices>();
 //Page
 builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
 builder.Services.AddScoped<IInventoryServices, InventoryServices>();
-builder.Services.AddScoped<IPOSServices, POSServices>();
-builder.Services.AddScoped<IPromotionServices, PromotionServices>();
-builder.Services.AddScoped<IDashboardServices, DashboardServices>();
+//builder.Services.AddScoped<IPOSServices, POSServices>();
+//builder.Services.AddScoped<IPromotionServices, PromotionServices>();
+//builder.Services.AddScoped<IDashboardServices, DashboardServices>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
