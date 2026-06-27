@@ -190,6 +190,7 @@ namespace Backend_ThriftFlowSystem.Services
                         <div style='max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);'>
                             
                             <div style='padding: 30px 40px 20px; text-align: center;'>
+
                                 <img src='{logoUrl}' alt='ThriftFlow' style='width: 150px; height: auto;' />
                             </div>
 
