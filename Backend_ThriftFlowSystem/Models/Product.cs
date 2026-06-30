@@ -22,6 +22,14 @@ namespace Backend_ThriftFlowSystem.Models
         [MaxLength(150)]
         public string Name { get; set; } = string.Empty;
 
+        public double? Width { get; set; }
+        public double? Length { get; set; }
+
+        [MaxLength(100)]
+        public string? NeckTag { get; set; }
+
+        public string? Detail { get; set; }
+
         [Required]
         [MaxLength(100)]
         public string SKU { get; set; } = null!;

@@ -6,7 +6,7 @@ namespace Backend_ThriftFlowSystem.Interfaces
     public interface IInventoryServices
     {
         // Category
-        Task<ResultListReply> GetCategoriesAsync();
+        Task<ResultListReply> GetCategoriesAsync(bool? isActive = null);
         Task<ResultListReply> CreateCategoryAsync(CategoryCreateRequest request, int employeeId);
         Task<ResultListReply> UpdateCategoryAsync(int id, CategoryUpdateRequest request, int employeeId, string pin);
         Task<ResultListReply> ToggleCategoryActiveAsync(int id, int employeeId, string pin);
@@ -18,12 +18,13 @@ namespace Backend_ThriftFlowSystem.Interfaces
         Task<ResultListReply> ToggleSupplierActiveAsync(int id, int employeeId, string pin);
 
         // ProductLot
-        Task<ResultListReply> GetProductLotsAsync();
+        Task<ResultListReply> GetProductLotsAsync(bool? isActive = null);
         Task<ResultListReply> CreateProductLotAsync(ProductLotCreateRequest request, int employeeId);
         Task<ResultListReply> UpdateProductLotAsync(int id, ProductLotUpdateRequest request, int employeeId, string pin);
         Task<ResultListReply> ToggleProductLotActiveAsync(int id, int employeeId, string pin);
 
         // Product
+        Task<ResultListReply> GetProductByIdAsync(int id);
         Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null);
         Task<ResultListReply> CreateProductAsync(ProductCreateRequest request, int employeeId);
         Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId, string pin);

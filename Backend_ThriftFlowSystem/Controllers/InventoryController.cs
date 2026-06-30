@@ -31,18 +31,13 @@ namespace Backend_ThriftFlowSystem.Controllers
         //categories
         [HttpGet("categories")]
         [Authorize]
-        public async Task<IActionResult> GetCategories()
+        public async Task<IActionResult> GetCategories([FromQuery] bool? isActive = null)
         {
-            try
-            {
-                var result = await _inventoryServices.GetCategoriesAsync();
+ 
+                var result = await _inventoryServices.GetCategoriesAsync(isActive);
                 int statusCode = _resultReply.MapReply(result);
                 return StatusCode(statusCode, result);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
-            }
+            
         }
 
         [HttpPost("categories")]
@@ -161,11 +156,11 @@ namespace Backend_ThriftFlowSystem.Controllers
         //Product Lots
         [HttpGet("product-lots")]
         [Authorize]
-        public async Task<IActionResult> GetProductLots()
+        public async Task<IActionResult> GetProductLots([FromQuery] bool? isActive = null)
         {
             try
             {
-                var result = await _inventoryServices.GetProductLotsAsync();
+                var result = await _inventoryServices.GetProductLotsAsync(isActive);
                 int statusCode = _resultReply.MapReply(result);
                 return StatusCode(statusCode, result);
             }
@@ -222,15 +217,31 @@ namespace Backend_ThriftFlowSystem.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
             }
         }
-
         //Products
-        [HttpGet("products")]
+        [HttpGet("products/{id}")]
         [Authorize]
-        public async Task<IActionResult> GetProducts()
+        public async Task<IActionResult> GetProductById(int id)
         {
             try
             {
-                var result = await _inventoryServices.GetProductsAsync();
+                var result = await _inventoryServices.GetProductByIdAsync(id);
+                return StatusCode(_resultReply.MapReply(result), result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        
+        [HttpGet("products")]
+        [Authorize]
+        //public async Task<IActionResult> GetProducts()
+        public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
+        {
+            try
+            {
+                var result = await _inventoryServices.GetProductsAsync(page, pageSize, search);
                 int statusCode = _resultReply.MapReply(result);
                 return StatusCode(statusCode, result);
             }
