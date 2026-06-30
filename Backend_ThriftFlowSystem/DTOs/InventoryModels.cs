@@ -60,6 +60,9 @@ namespace Backend_ThriftFlowSystem.DTOs
         public string? ColorTag { get; set; }
         [Required]
         public decimal TotalLotCost { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1")]
+        public int ReceivedQuantity { get; set; }
     }
     public class ProductLotUpdateRequest
     {
@@ -69,12 +72,18 @@ namespace Backend_ThriftFlowSystem.DTOs
         public string? ColorTag { get; set; }
         [Required] 
         public decimal TotalLotCost { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Quantity must be at least 1")]
+        public int ReceivedQuantity { get; set; }
+
     }
     public class ProductLotResponse : ProductLotCreateRequest
     {
         public int Id { get; set; }
         public bool IsActive { get; set; }
         public DateTime? ReceivedDate { get; set; }
+        public int AllocatedQuantity { get; set; }
+        public decimal CostPerUnit { get; set; }
     }
 
     // DTOs for Product
@@ -86,6 +95,10 @@ namespace Backend_ThriftFlowSystem.DTOs
         public int ProductLotId { get; set; }
         [Required]
         public string Name { get; set; } = string.Empty;
+        public double? Width { get; set; }
+        public double? Length { get; set; }
+        public string? NeckTag { get; set; }
+        public string? Detail { get; set; }
         public string? SKU { get; set; } = string.Empty;
         [Required]
         public decimal SellingPrice { get; set; }
@@ -97,10 +110,17 @@ namespace Backend_ThriftFlowSystem.DTOs
     {
         [Required] 
         public int CategoryId { get; set; }
+
         [Required] 
         public int ProductLotId { get; set; }
+
         [Required] 
         public string Name { get; set; } = string.Empty;
+        public double? Width { get; set; }
+        public double? Length { get; set; }
+        public string? NeckTag { get; set; }
+        public string? Detail { get; set; }
+
         [Required] 
         public decimal SellingPrice { get; set; }
         public bool IsGenericSKU { get; set; }
@@ -110,14 +130,29 @@ namespace Backend_ThriftFlowSystem.DTOs
     {
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public double? Width { get; set; }
+        public double? Length { get; set; }
+        public string? NeckTag { get; set; }
+        public string? Detail { get; set; }
         public string SKU { get; set; } = string.Empty;
         public decimal SellingPrice { get; set; }
         public int QuantityInStock { get; set; }
         public string? ImageUrl { get; set; }
-        public string ProductLotName { get; set; }
+        public int ProductLotId { get; set; }
+        public string ProductLotName { get; set; } = string.Empty;
+        public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public bool IsGenericSKU { get; set; }
         public bool IsActive { get; set; }
+    }
+
+    public class PagedProductResponse
+    {
+        public List<ProductResponse> Items { get; set; } = new();
+        public int TotalItems { get; set; }
+        public int Page { get; set; }
+        public int PageSize { get; set; }
+        public int TotalPages { get; set; }
     }
 
     // DTOs for Adjustment
