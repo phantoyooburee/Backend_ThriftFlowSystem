@@ -3,6 +3,7 @@ using System;
 using Backend_ThriftFlowSystem.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Backend_ThriftFlowSystem.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260622094219_AddNeckTagToProducts")]
+    partial class AddNeckTagToProducts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -255,13 +258,6 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("AppliedPromotionIds")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int?>("ApprovedById")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -270,12 +266,6 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("IsPromotionSkipped")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsSpecialPrice")
-                        .HasColumnType("boolean");
 
                     b.Property<decimal>("NetAmount")
                         .HasColumnType("decimal(18,2)");
@@ -288,9 +278,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Property<string>("PaymentSlipUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
-
-                    b.Property<int?>("PromotionId")
-                        .HasColumnType("integer");
 
                     b.Property<string>("ReceiptNumber")
                         .IsRequired()
@@ -307,11 +294,7 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ApprovedById");
-
                     b.HasIndex("EmployeeId");
-
-                    b.HasIndex("PromotionId");
 
                     b.ToTable("Orders");
                 });
@@ -323,9 +306,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("CostPrice")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("OrderId")
                         .HasColumnType("integer");
@@ -393,9 +373,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Detail")
-                        .HasColumnType("text");
-
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
@@ -455,9 +432,6 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("AllocatedQuantity")
-                        .HasColumnType("integer");
-
                     b.Property<string>("ColorTag")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
@@ -490,61 +464,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.HasIndex("SupplierId");
 
                     b.ToTable("ProductLots");
-                });
-
-            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Promotion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("ApplicableCategoryId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ApplicableProductLotId")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("BundlePrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("ConditionQuantity")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<decimal>("DiscountValue")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<DateTime>("EndDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<string>("PromotionType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ApplicableCategoryId");
-
-                    b.HasIndex("ApplicableProductLotId");
-
-                    b.ToTable("Promotions");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Role", b =>
@@ -690,25 +609,13 @@ namespace Backend_ThriftFlowSystem.Migrations
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Order", b =>
                 {
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "ApprovedBy")
-                        .WithMany()
-                        .HasForeignKey("ApprovedById");
-
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Promotion", "Promotion")
-                        .WithMany()
-                        .HasForeignKey("PromotionId");
-
-                    b.Navigation("ApprovedBy");
-
                     b.Navigation("Employee");
-
-                    b.Navigation("Promotion");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.OrderItem", b =>
@@ -767,21 +674,6 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasForeignKey("SupplierId");
 
                     b.Navigation("Supplier");
-                });
-
-            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Promotion", b =>
-                {
-                    b.HasOne("Backend_ThriftFlowSystem.Models.Category", "ApplicableCategory")
-                        .WithMany()
-                        .HasForeignKey("ApplicableCategoryId");
-
-                    b.HasOne("Backend_ThriftFlowSystem.Models.ProductLot", "ApplicableProductLot")
-                        .WithMany()
-                        .HasForeignKey("ApplicableProductLotId");
-
-                    b.Navigation("ApplicableCategory");
-
-                    b.Navigation("ApplicableProductLot");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>

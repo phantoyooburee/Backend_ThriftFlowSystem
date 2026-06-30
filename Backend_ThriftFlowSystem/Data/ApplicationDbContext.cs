@@ -25,6 +25,11 @@ namespace Backend_ThriftFlowSystem.Data
         public DbSet<InventoryLog> InventoryLogs { get; set; }
         public DbSet<SystemActionLog> SystemActionLogs { get; set; }
 
+        //Pos Order related tables
+        public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderItem> OrderItems { get; set; }
+        public DbSet<Promotion> Promotions { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -53,6 +58,17 @@ namespace Backend_ThriftFlowSystem.Data
                 .HasForeignKey(p => p.ProductLotId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // Order and OrderItem configurations
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Employee)
+                .WithMany()
+                .HasForeignKey(o => o.EmployeeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<OrderItem>()
+                .HasOne(oi => oi.Product)
+                .WithMany()
+                .HasForeignKey(oi => oi.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

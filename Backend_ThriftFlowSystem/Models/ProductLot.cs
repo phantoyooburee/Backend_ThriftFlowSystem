@@ -20,11 +20,18 @@ namespace Backend_ThriftFlowSystem.Models
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal TotalLotCost { get; set; }
+
+        public int ReceivedQuantity { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal CostPerUnit { get; set; }
+
         public DateTime ReceivedDate { get; set; } = DateTime.UtcNow;
         public bool IsActive { get; set; } = true;
 
         [ForeignKey("SupplierId")]
         public Supplier? Supplier { get; set; }
+        public int AllocatedQuantity { get; set; } = 0;
 
         [JsonIgnore]
         public ICollection<Product> Products { get; set; } = new List<Product>();
