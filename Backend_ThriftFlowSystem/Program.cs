@@ -81,8 +81,8 @@ builder.Services.AddScoped<IEmailServices, EmailServices>();
 //Page
 builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
 builder.Services.AddScoped<IInventoryServices, InventoryServices>();
-//builder.Services.AddScoped<IPOSServices, POSServices>();
-//builder.Services.AddScoped<IPromotionServices, PromotionServices>();
+builder.Services.AddScoped<IPOSServices, POSServices>();
+builder.Services.AddScoped<IPromotionServices, PromotionServices>();
 //builder.Services.AddScoped<IDashboardServices, DashboardServices>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
