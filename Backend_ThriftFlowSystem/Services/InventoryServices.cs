@@ -52,12 +52,16 @@ namespace Backend_ThriftFlowSystem.Services
         }
 
         // Category Services
-        public async Task<ResultListReply> GetCategoriesAsync()
+        public async Task<ResultListReply> GetCategoriesAsync(bool? isActive = null)
         {
             var reply = new ResultListReply();
             try
             {
-                var categories = await _context.Categories
+                var query = _context.Categories.AsQueryable();
+                if (isActive.HasValue)
+                    query = query.Where(c => c.IsActive == isActive.Value);
+
+                var categories = await query
                     .Select(c => new CategoryResponse
                     {
                         Id = c.Id,
@@ -490,12 +494,16 @@ namespace Backend_ThriftFlowSystem.Services
         }
 
         // ProductLot Services
-        public async Task<ResultListReply> GetProductLotsAsync()
+        public async Task<ResultListReply> GetProductLotsAsync(bool? isActive = null)
         {
             var reply = new ResultListReply();
             try
             {
-                var lots = await _context.ProductLots
+                var query = _context.ProductLots.AsQueryable();
+                if (isActive.HasValue)
+                    query = query.Where(l => l.IsActive == isActive.Value);
+
+                var lots = await query
                     .Select(l => new ProductLotResponse
                     {
                         Id = l.Id,
@@ -503,7 +511,10 @@ namespace Backend_ThriftFlowSystem.Services
                         LotName = l.LotName,
                         ColorTag = l.ColorTag,
                         TotalLotCost = l.TotalLotCost,
+                        ReceivedQuantity = l.ReceivedQuantity,
+                        CostPerUnit = l.CostPerUnit,
                         ReceivedDate = l.ReceivedDate,
+                        AllocatedQuantity = l.AllocatedQuantity,
                         IsActive = l.IsActive
                     }).ToListAsync();
 
@@ -558,7 +569,9 @@ namespace Backend_ThriftFlowSystem.Services
                     SupplierId = request.SupplierId,
                     LotName = request.LotName.Trim(),
                     ColorTag = request.ColorTag?.Trim(),
-                    TotalLotCost = request.TotalLotCost
+                    TotalLotCost = request.TotalLotCost,
+                    ReceivedQuantity = request.ReceivedQuantity,
+                    CostPerUnit = request.ReceivedQuantity > 0 ? request.TotalLotCost / request.ReceivedQuantity : 0
                 };
 
                 _context.ProductLots.Add(lot);
@@ -582,6 +595,8 @@ namespace Backend_ThriftFlowSystem.Services
                     LotName = lot.LotName,
                     ColorTag = lot.ColorTag,
                     TotalLotCost = lot.TotalLotCost,
+                    ReceivedQuantity = lot.ReceivedQuantity,
+                    CostPerUnit = lot.CostPerUnit,
                     ReceivedDate = lot.ReceivedDate,
                     IsActive = lot.IsActive
                 };
@@ -649,6 +664,8 @@ namespace Backend_ThriftFlowSystem.Services
                 lot.LotName = request.LotName.Trim();
                 lot.ColorTag = request.ColorTag?.Trim();
                 lot.TotalLotCost = request.TotalLotCost;
+                lot.ReceivedQuantity = request.ReceivedQuantity;
+                lot.CostPerUnit = request.ReceivedQuantity > 0 ? request.TotalLotCost / request.ReceivedQuantity : 0;
                 _context.ProductLots.Update(lot);
 
                 _context.SystemActionLogs.Add(new SystemActionLog
@@ -670,6 +687,8 @@ namespace Backend_ThriftFlowSystem.Services
                     LotName = lot.LotName,
                     ColorTag = lot.ColorTag,
                     TotalLotCost = lot.TotalLotCost,
+                    ReceivedQuantity = lot.ReceivedQuantity,
+                    CostPerUnit = lot.CostPerUnit,
                     ReceivedDate = lot.ReceivedDate,
                     IsActive = lot.IsActive
                 };
@@ -761,17 +780,22 @@ namespace Backend_ThriftFlowSystem.Services
                     {
                         Id = p.Id,
                         Name = p.Name,
+                        Width = p.Width,
+                        Length = p.Length,
+                        NeckTag = p.NeckTag,
                         SKU = p.SKU,
                         SellingPrice = p.SellingPrice,
                         QuantityInStock = p.QuantityInStock,
                         ImageUrl = p.ImageUrl,
+                        ProductLotId = p.ProductLotId,
                         ProductLotName = p.ProductLot != null ? p.ProductLot.LotName : "Unknown",
+                        CategoryId = p.CategoryId,
                         CategoryName = p.Category != null ? p.Category.Name : "Unknown",
                         IsGenericSKU = p.IsGenericSKU,
                         IsActive = p.IsActive
                     }).ToListAsync();
 
-                reply.Data = new
+                reply.Data = new PagedProductResponse
                 {
                     Items = products,
                     TotalItems = totalItems,
@@ -792,6 +816,54 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
+        public async Task<ResultListReply> GetProductByIdAsync(int id)
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                var product = await _context.Products
+                    .Include(p => p.Category)
+                    .Include(p => p.ProductLot)
+                    .FirstOrDefaultAsync(p => p.Id == id);
+
+                if (product == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = $"ProductId : {id} not found.";
+                    return reply;
+                }
+
+                reply.Data = new ProductResponse
+                {
+                    Id = product.Id,
+                    CategoryId = product.CategoryId,
+                    ProductLotId = product.ProductLotId,
+                    Name = product.Name,
+                    Width = product.Width,
+                    Length = product.Length,
+                    NeckTag = product.NeckTag,
+                    Detail = product.Detail,
+                    SKU = product.SKU,
+                    SellingPrice = product.SellingPrice,
+                    QuantityInStock = product.QuantityInStock,
+                    ImageUrl = product.ImageUrl,
+                    ProductLotName = product.ProductLot?.LotName ?? "Unknown",
+                    CategoryName = product.Category?.Name ?? "Unknown",
+                    IsGenericSKU = product.IsGenericSKU,
+                    IsActive = product.IsActive
+                };
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error GetProductById");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
+            }
+            return reply;
+        }
+
         public async Task<ResultListReply> CreateProductAsync(ProductCreateRequest request, int employeeId)
         {
             var reply = new ResultListReply();
@@ -801,22 +873,40 @@ namespace Backend_ThriftFlowSystem.Services
 
             try
             {
-                var category = await _context.Categories.FindAsync(request.CategoryId);
-                if (category == null)
+
+                if (request.SellingPrice <= 0)
                 {
+                    await transaction.RollbackAsync();
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "SellingPrice can not value = 0.";
+                    return reply;
+                }
+
+                var category = await _context.Categories.FindAsync(request.CategoryId);
+                if (category == null || !category.IsActive)
+                {
+                    await transaction.RollbackAsync();
                     reply.Result.ToErrorStatus();
                     reply.Data = "Category not found.";
                     return reply;
                 }
 
                 var productLot = await _context.ProductLots.FindAsync(request.ProductLotId);
-                if (productLot == null)
+                if (productLot == null || !productLot.IsActive)
                 {
+                    await transaction.RollbackAsync();
                     reply.Result.ToErrorStatus();
                     reply.Data = "Product lot not found.";
                     return reply;
                 }
 
+                if ((productLot.AllocatedQuantity + request.InitialQuantity) > productLot.ReceivedQuantity)
+                {
+                    await transaction.RollbackAsync();
+                    reply.Result.ToErrorStatus();
+                    reply.Data = $"Invalid Quantity:ProductLot '{productLot.LotName}' Not enouge (Used {productLot.AllocatedQuantity}, Input {productLot.ReceivedQuantity})";
+                    return reply;
+                }
                 string? uploadedImageUrl = null;
 
                 if (request.ImageFile != null && request.ImageFile.Length > 0)
@@ -845,11 +935,16 @@ namespace Backend_ThriftFlowSystem.Services
                     CategoryId = request.CategoryId,
                     ProductLotId = request.ProductLotId,
                     Name = request.Name!.Trim(),
+                    Width = request.Width,
+                    Length = request.Length,
+                    NeckTag = request.NeckTag?.Trim(),
+                    Detail = request.Detail?.Trim(),
                     SKU = finalSKU,
                     SellingPrice = request.SellingPrice,
                     QuantityInStock = request.InitialQuantity,
                     IsGenericSKU = request.IsGenericSKU,
-                    ImageUrl = uploadedImageUrl
+                    ImageUrl = uploadedImageUrl,
+                    IsActive = request.InitialQuantity != 0
                 };
 
                 var log = new InventoryLog
@@ -861,6 +956,12 @@ namespace Backend_ThriftFlowSystem.Services
                     Product = product
                 };
 
+                productLot.AllocatedQuantity += request.InitialQuantity;
+                if (productLot.AllocatedQuantity >= productLot.ReceivedQuantity)
+                {
+                    productLot.IsActive = false;
+                }
+                _context.ProductLots.Update(productLot);
                 _context.Products.Add(product);
                 _context.InventoryLogs.Add(log);
 
@@ -871,11 +972,17 @@ namespace Backend_ThriftFlowSystem.Services
                 {
                     Id = product.Id,
                     Name = product.Name,
+                    Width = product.Width,
+                    Length = product.Length,
+                    NeckTag = product.NeckTag,
                     SKU = product.SKU,
+                    Detail = product.Detail,
                     SellingPrice = product.SellingPrice,
                     QuantityInStock = product.QuantityInStock,
                     ImageUrl = product.ImageUrl,
+                    ProductLotId = product.ProductLotId,
                     ProductLotName = productLot.LotName,
+                    CategoryId = product.CategoryId,
                     CategoryName = category.Name,
                     IsGenericSKU = product.IsGenericSKU,
                     IsActive = product.IsActive
@@ -915,6 +1022,13 @@ namespace Backend_ThriftFlowSystem.Services
             var reply = new ResultListReply();
             try
             {
+                if (request.SellingPrice <= 0)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "SellingPrice can not value = 0.";
+                    return reply;
+                }
+
                 if (!await IsPinValid(employeeId, pin))
                 {
                     reply.Result.ToErrorStatus();
@@ -935,6 +1049,12 @@ namespace Backend_ThriftFlowSystem.Services
                     reply.Data = "Category not found.";
                     return reply;
                 }
+                if (request.CategoryId != product.CategoryId && !category.IsActive)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Can not change to this Category Disabled  ";
+                    return reply;
+                }
                 var productLot = await _context.ProductLots.FindAsync(request.ProductLotId);
                 if (productLot == null)
                 {
@@ -942,6 +1062,7 @@ namespace Backend_ThriftFlowSystem.Services
                     reply.Data = "Product lot not found.";
                     return reply;
                 }
+                //Image upload handling
                 if (request.ImageFile != null && request.ImageFile.Length > 0)
                 {
                     string? oldImageUrl = product.ImageUrl;
@@ -973,8 +1094,12 @@ namespace Backend_ThriftFlowSystem.Services
 
 
                 product.CategoryId = request.CategoryId;
-                product.ProductLotId = request.ProductLotId;
+                //product.ProductLotId = request.ProductLotId;
                 product.Name = request.Name!.Trim();
+                product.Width = request.Width;
+                product.Length = request.Length;
+                product.NeckTag = request.NeckTag?.Trim();
+                product.Detail = request.Detail?.Trim();
                 product.SellingPrice = request.SellingPrice;
                 product.IsGenericSKU = request.IsGenericSKU;
 
@@ -995,11 +1120,17 @@ namespace Backend_ThriftFlowSystem.Services
                 {
                     Id = product.Id,
                     Name = product.Name,
+                    Width = product.Width,
+                    Length = product.Length,
+                    NeckTag = product.NeckTag,
+                    Detail = product.Detail,
                     SKU = product.SKU,
                     SellingPrice = product.SellingPrice,
                     QuantityInStock = product.QuantityInStock,
                     ImageUrl = product.ImageUrl,
+                    ProductLotId = product.ProductLotId,
                     ProductLotName = productLot.LotName,
+                    CategoryId = product.CategoryId,
                     CategoryName = category.Name,
                     IsGenericSKU = product.IsGenericSKU,
                     IsActive = product.IsActive
@@ -1090,7 +1221,10 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                var product = await _context.Products.FindAsync(request.ProductId);
+                //var product = await _context.Products.FindAsync(request.ProductId);
+                var product = await _context.Products
+                    .Include(p => p.ProductLot)
+                    .FirstOrDefaultAsync(p => p.Id == request.ProductId);
                 if (product == null)
                 {
                     reply.Result.ToErrorStatus();
@@ -1098,23 +1232,57 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
+                if (request.Quantity > 0 && product.ProductLot != null)
+                {
+                    if ((product.ProductLot.AllocatedQuantity + request.Quantity) > product.ProductLot.ReceivedQuantity)
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = $"Invalid Quantity: ProductLot '{product.ProductLot.LotName}' not enouge (The product has already been cut off {product.ProductLot.AllocatedQuantity}, Input {product.ProductLot.ReceivedQuantity})";
+                        return reply;
+                    }
+                }
                 int oldQuantity = product.QuantityInStock;
 
-                int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                UPDATE ""Products""
-                SET ""QuantityInStock"" = ""QuantityInStock"" + {request.Quantity}
-                WHERE ""Id"" = {request.ProductId}
-                AND ""QuantityInStock"" + {request.Quantity} >= 0");
+                //int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+                //UPDATE ""Products""
+                //SET ""QuantityInStock"" = ""QuantityInStock"" + {request.Quantity}
+                //WHERE ""Id"" = {request.ProductId}
+                //AND ""QuantityInStock"" + {request.Quantity} >= 0");
 
-                if (rowsAffected == 0)
-                {
-                    reply.Result.ToErrorStatus();
-                    reply.Data = "Not enough stock, or stock changed by another transaction. Please retry.";
-                    return reply;
-                }
+                //if (rowsAffected == 0)
+                //{
+                //    reply.Result.ToErrorStatus();
+                //    reply.Data = "Not enough stock, or stock changed by another transaction. Please retry.";
+                //    return reply;
+                //}
 
                 await _context.Entry(product).ReloadAsync();
                 int newQuantity = product.QuantityInStock;
+
+                bool wasActive = product.IsActive;
+                if (newQuantity <= 0)
+                {
+                    product.IsActive = false;
+                }
+                else if (incomingAction == ActionTypes.InRestock)
+                {
+                    product.IsActive = true;
+                }
+
+                if (wasActive != product.IsActive)
+                {
+                    _context.Products.Update(product);
+                }
+                if (product.ProductLot != null && request.Quantity > 0)
+                {
+                    product.ProductLot.AllocatedQuantity += request.Quantity;
+
+                    if (product.ProductLot.AllocatedQuantity >= product.ProductLot.ReceivedQuantity)
+                    {
+                        product.ProductLot.IsActive = false; 
+                    }
+                    _context.ProductLots.Update(product.ProductLot);
+                }
 
                 var log = new InventoryLog
                 {
