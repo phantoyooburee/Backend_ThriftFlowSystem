@@ -140,6 +140,7 @@ namespace Backend_ThriftFlowSystem.DTOs
         public string? ImageUrl { get; set; }
         public int ProductLotId { get; set; }
         public string ProductLotName { get; set; } = string.Empty;
+        public string? ColorTag { get; set; }
         public int CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;
         public bool IsGenericSKU { get; set; }

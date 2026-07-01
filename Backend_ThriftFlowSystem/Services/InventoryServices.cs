@@ -17,7 +17,9 @@ namespace Backend_ThriftFlowSystem.Services
     {
         public const string InRestock = "IN_RESTOCK";
         public const string OutDamage = "OUT_DAMAGE";
-        public const string Adjust = "ADJUST"; 
+        public const string InAdjust = "IN_ADJUST";
+        public const string OutLoss = "OUT_LOSS";
+        public const string InReturn = "IN_RETURN";
         public const string Create = "CREATE";
         public const string CreateFail = "CREATE_FAIL";
         public const string Update = "UPDATE";
@@ -25,8 +27,8 @@ namespace Backend_ThriftFlowSystem.Services
         public const string Restore = "RESTORE";
         public const string SoftDelete = "SOFT_DELETE";
 
-        
-        public static readonly string[] ValidAdjustActions = { InRestock, OutDamage, Adjust };
+        public static readonly string[] ValidAdjustActions = 
+        { InRestock, OutDamage, InAdjust, OutLoss, InReturn };
     }
 
     public class InventoryServices : IInventoryServices
@@ -754,7 +756,8 @@ namespace Backend_ThriftFlowSystem.Services
 
 
         // Product Services
-        public async Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null)
+        public async Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null, bool? isGenericSKU = null, bool? isActive = null)
+        //public async Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null)
         {
             var reply = new ResultListReply();
             try
@@ -763,6 +766,12 @@ namespace Backend_ThriftFlowSystem.Services
                     .Include(p => p.Category)
                     .Include(p => p.ProductLot)
                     .AsQueryable();
+
+                if (isActive.HasValue)
+                    query = query.Where(p => p.IsActive == isActive.Value);
+
+                if (isGenericSKU.HasValue)
+                    query = query.Where(p => p.IsGenericSKU == isGenericSKU.Value);
 
                 if (!string.IsNullOrWhiteSpace(search))
                 {
@@ -789,6 +798,7 @@ namespace Backend_ThriftFlowSystem.Services
                         ImageUrl = p.ImageUrl,
                         ProductLotId = p.ProductLotId,
                         ProductLotName = p.ProductLot != null ? p.ProductLot.LotName : "Unknown",
+                        ColorTag = p.ProductLot != null ? p.ProductLot.ColorTag : null,
                         CategoryId = p.CategoryId,
                         CategoryName = p.Category != null ? p.Category.Name : "Unknown",
                         IsGenericSKU = p.IsGenericSKU,
@@ -848,6 +858,7 @@ namespace Backend_ThriftFlowSystem.Services
                     QuantityInStock = product.QuantityInStock,
                     ImageUrl = product.ImageUrl,
                     ProductLotName = product.ProductLot?.LotName ?? "Unknown",
+                    ColorTag = product.ProductLot?.ColorTag,
                     CategoryName = product.Category?.Name ?? "Unknown",
                     IsGenericSKU = product.IsGenericSKU,
                     IsActive = product.IsActive
@@ -982,6 +993,7 @@ namespace Backend_ThriftFlowSystem.Services
                     ImageUrl = product.ImageUrl,
                     ProductLotId = product.ProductLotId,
                     ProductLotName = productLot.LotName,
+                    ColorTag = productLot.ColorTag,
                     CategoryId = product.CategoryId,
                     CategoryName = category.Name,
                     IsGenericSKU = product.IsGenericSKU,
@@ -1130,6 +1142,7 @@ namespace Backend_ThriftFlowSystem.Services
                     ImageUrl = product.ImageUrl,
                     ProductLotId = product.ProductLotId,
                     ProductLotName = productLot.LotName,
+                    ColorTag = productLot.ColorTag,
                     CategoryId = product.CategoryId,
                     CategoryName = category.Name,
                     IsGenericSKU = product.IsGenericSKU,
@@ -1201,7 +1214,6 @@ namespace Backend_ThriftFlowSystem.Services
                 .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
-        // Adjust Stock Service
         public async Task<ResultListReply> AdjustStockAsync(StockAdjustRequest request, int employeeId, string pin)
         {
             var reply = new ResultListReply();
@@ -1213,6 +1225,7 @@ namespace Backend_ThriftFlowSystem.Services
                     reply.Data = "Invalid PIN. Permission denied.";
                     return reply;
                 }
+
                 string incomingAction = request.ActionType.ToUpper().Trim();
                 if (!ActionTypes.ValidAdjustActions.Contains(incomingAction))
                 {
@@ -1221,10 +1234,10 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                //var product = await _context.Products.FindAsync(request.ProductId);
                 var product = await _context.Products
                     .Include(p => p.ProductLot)
                     .FirstOrDefaultAsync(p => p.Id == request.ProductId);
+
                 if (product == null)
                 {
                     reply.Result.ToErrorStatus();
@@ -1232,40 +1245,80 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                if (request.Quantity > 0 && product.ProductLot != null)
+                // 🧠 2. ลอจิกแปลงเครื่องหมาย (Auto-Sign Logic)
+                int actualQuantityChange = 0;
+
+                if (incomingAction == ActionTypes.InRestock || incomingAction == ActionTypes.InAdjust || incomingAction == ActionTypes.InReturn)
                 {
-                    if ((product.ProductLot.AllocatedQuantity + request.Quantity) > product.ProductLot.ReceivedQuantity)
+                    // กลุ่มเข้า (IN): เติมของ / หาของเจอ -> บังคับเป็น "บวก"
+                    actualQuantityChange = Math.Abs(request.Quantity);
+                }
+                else if (incomingAction == ActionTypes.OutDamage || incomingAction == ActionTypes.OutLoss)
+                {
+                    // กลุ่มออก (OUT): ของเสีย / ของหาย -> บังคับเป็น "ลบ"
+                    actualQuantityChange = -Math.Abs(request.Quantity);
+                }
+
+                // ป้องกันหน้าบ้านยิงเลข 0 มาเล่นๆ
+                if (actualQuantityChange == 0)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Quantity cannot be zero.";
+                    return reply;
+                }
+
+                // 🧠 2. กฎเหล็กสินค้าชิ้นเดียว (Unique Item Constraint) - ตัวที่ใช้งานจริง!
+                if (!product.IsGenericSKU && actualQuantityChange > 0)
+                {
+                    // ถ้าเป็นของชิ้นเดียว และกำลังจะ "เพิ่มสต๊อก" (รับคืน / หาเจอ)
+                    // เช็คว่าถ้ารวมกับของเดิมแล้วเกิน 1 ไหม
+                    if (product.QuantityInStock + actualQuantityChange > 1)
                     {
                         reply.Result.ToErrorStatus();
-                        reply.Data = $"Invalid Quantity: ProductLot '{product.ProductLot.LotName}' not enouge (The product has already been cut off {product.ProductLot.AllocatedQuantity}, Input {product.ProductLot.ReceivedQuantity})";
+                        reply.Data = "Unique items (IsGenericSKU = false) cannot have a stock quantity greater than 1.";
                         return reply;
                     }
                 }
+
+                // เช็คการดึงของเพิ่มจาก Lot (จะทำเฉพาะตอนเพิ่มสต๊อกเท่านั้น)
+                if (actualQuantityChange > 0 && product.ProductLot != null)
+                {
+                    if ((product.ProductLot.AllocatedQuantity + actualQuantityChange) > product.ProductLot.ReceivedQuantity)
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = $"Invalid Quantity: ProductLot '{product.ProductLot.LotName}' not enough. (Used {product.ProductLot.AllocatedQuantity}, Received {product.ProductLot.ReceivedQuantity})";
+                        return reply;
+                    }
+                }
+
                 int oldQuantity = product.QuantityInStock;
 
-                //int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                //UPDATE ""Products""
-                //SET ""QuantityInStock"" = ""QuantityInStock"" + {request.Quantity}
-                //WHERE ""Id"" = {request.ProductId}
-                //AND ""QuantityInStock"" + {request.Quantity} >= 0");
+                // อัปเดตตาราง Products ด้วย actualQuantityChange
+                int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
+            UPDATE ""Products""
+            SET ""QuantityInStock"" = ""QuantityInStock"" + {actualQuantityChange}
+            WHERE ""Id"" = {request.ProductId}
+            AND ""QuantityInStock"" + {actualQuantityChange} >= 0");
 
-                //if (rowsAffected == 0)
-                //{
-                //    reply.Result.ToErrorStatus();
-                //    reply.Data = "Not enough stock, or stock changed by another transaction. Please retry.";
-                //    return reply;
-                //}
+                if (rowsAffected == 0)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Not enough stock to deduct, or stock was changed by another transaction. Please retry.";
+                    return reply;
+                }
 
                 await _context.Entry(product).ReloadAsync();
                 int newQuantity = product.QuantityInStock;
-
                 bool wasActive = product.IsActive;
+
+                // ลอจิก IsActive
                 if (newQuantity <= 0)
                 {
                     product.IsActive = false;
                 }
-                else if (incomingAction == ActionTypes.InRestock)
+                else
                 {
+                    // มีของเมื่อไหร่ เปิดขายทันทีไม่ว่า Action ไหน
                     product.IsActive = true;
                 }
 
@@ -1273,13 +1326,15 @@ namespace Backend_ThriftFlowSystem.Services
                 {
                     _context.Products.Update(product);
                 }
-                if (product.ProductLot != null && request.Quantity > 0)
+
+                // หักของออกจากกระสอบ (กรณีเติมสต๊อก)
+                if (product.ProductLot != null && actualQuantityChange > 0)
                 {
-                    product.ProductLot.AllocatedQuantity += request.Quantity;
+                    product.ProductLot.AllocatedQuantity += actualQuantityChange;
 
                     if (product.ProductLot.AllocatedQuantity >= product.ProductLot.ReceivedQuantity)
                     {
-                        product.ProductLot.IsActive = false; 
+                        product.ProductLot.IsActive = false;
                     }
                     _context.ProductLots.Update(product.ProductLot);
                 }
@@ -1288,11 +1343,12 @@ namespace Backend_ThriftFlowSystem.Services
                 {
                     EmployeeId = employeeId,
                     ActionType = incomingAction,
-                    QuantityChanged = request.Quantity,
+                    QuantityChanged = actualQuantityChange, // บันทึกค่าที่มีเครื่องหมาย +- ชัดเจน
                     Note = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : "Manual Stock Adjustment",
                     ProductId = product.Id
                 };
                 _context.InventoryLogs.Add(log);
+
                 await _context.SaveChangesAsync();
 
                 reply.Data = new
@@ -1301,7 +1357,7 @@ namespace Backend_ThriftFlowSystem.Services
                     Name = product.Name,
                     OldQuantity = oldQuantity,
                     NewQuantity = newQuantity,
-                    AdjustedBy = request.Quantity,
+                    AdjustedBy = actualQuantityChange,
                     Action = log.ActionType
                 };
 

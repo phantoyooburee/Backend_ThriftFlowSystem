@@ -25,7 +25,7 @@ namespace Backend_ThriftFlowSystem.Interfaces
 
         // Product
         Task<ResultListReply> GetProductByIdAsync(int id);
-        Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null);
+        Task<ResultListReply> GetProductsAsync(int page = 1, int pageSize = 20, string? search = null, bool? isGenericSKU = null, bool? isActive = null);
         Task<ResultListReply> CreateProductAsync(ProductCreateRequest request, int employeeId);
         Task<ResultListReply> UpdateProductAsync(int id, ProductUpdateRequest request, int employeeId, string pin);
         Task<ResultListReply> ToggleProductActiveAsync(int id, int employeeId, string pin);

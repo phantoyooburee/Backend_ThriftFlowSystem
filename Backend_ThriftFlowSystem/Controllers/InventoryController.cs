@@ -237,7 +237,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         [HttpGet("products")]
         [Authorize]
         //public async Task<IActionResult> GetProducts()
-        public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
+        public async Task<IActionResult> GetProducts([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? search = null, [FromQuery] bool? isGenericSKU = null, [FromQuery] bool? isActive = null)
         {
             try
             {
