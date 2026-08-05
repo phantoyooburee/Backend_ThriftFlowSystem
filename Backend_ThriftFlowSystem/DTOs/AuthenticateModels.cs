@@ -92,5 +92,73 @@ namespace Backend_ThriftFlowSystem.DTOs
             [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
             public string ConfirmPassword { get; set; } = string.Empty;
         }
+
+        public class EmployeeSummaryDto
+        {
+            public int Id { get; set; }
+            public string FirstName { get; set; } = string.Empty;
+            public string LastName { get; set; } = string.Empty;
+            public string RoleName { get; set; } = string.Empty; 
+            public string Email { get; set; } = string.Empty;
+            public bool IsActive { get; set; }
+        }
+        public class EmployeeUpdateRequest
+        {
+
+            [StringLength(100)]
+            [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "First name can contain letter only.")]
+            [DefaultValue("Tanguay")]
+            public string FirstName { get; set; } = string.Empty;
+
+            [StringLength(100)]
+            [RegularExpression(@"^[\p{L}\p{M}\s]*$", ErrorMessage = "Last name can contain letters only.")]
+            [DefaultValue("Saelee")]
+            public string LastName { get; set; } = string.Empty;
+        }
+
+        public class ChangePasswordRequest
+        {
+            public string OldPassword { get; set; } = string.Empty;
+
+            [Required, RegularExpression(
+            @"^[a-zA-Z0-9!@#$%^&*()_\-+=\[{\]};:'"",<.>/?\\|`~]{8,}$",
+            ErrorMessage = "Password must be at least 8 characters and contain only letters, numbers, and special characters (!@#$%^&* etc.) ")]
+            public string NewPassword { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "Confirm Password is required")]
+            [Compare("NewPassword", ErrorMessage = "The password and confirmation password do not match.")]
+            public string ConfirmNewPassword { get; set; } = string.Empty;
+
+        }
+        public class ChagePinRequest
+        {
+            public string OldPin { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "PIN is required")]
+            [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
+            public string NewPin { get; set; } = string.Empty;
+
+        }
+        public class ResetPinWithPasswordRequest
+        {
+            public string Password { get; set; } = string.Empty;
+
+            [Required(ErrorMessage = "PIN is required")]
+            [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
+            public string? NewPin { get; set; }
+        }
+        public class AdminForceResetPinRequest
+        {
+            [Required(ErrorMessage = "PIN is required")]
+            [RegularExpression(@"^[0-9]{6}$", ErrorMessage = "PIN must be exactly 6 digits.")]
+            public string? NewPin { get; set; }
+        }
+
+        public class ChangeRoleRequest
+        {
+            [Required(ErrorMessage = "RoleId is required")]
+            public int NewRoleId { get; set; }
+        }
+
     }
 }
