@@ -15,29 +15,22 @@ namespace Backend_ThriftFlowSystem.Services
         private readonly ILogger<POSServices> _logger;
         private readonly IWebHostEnvironment _env;
         private readonly Supabase.Client _supabase;
+        private readonly IInventoryServices _inventoryServices;
 
         public POSServices(
             ApplicationDbContext context,
             IResultReplyServices reply,
             ILogger<POSServices> logger,
             IWebHostEnvironment env,
-            Supabase.Client supabase)
+            Supabase.Client supabase,
+            IInventoryServices inventoryServices)
         {
             _context = context;
             _reply = reply;
             _logger = logger;
             _env = env;
             _supabase = supabase;
-        }
-
-        //เก็บผลลัพธ์การคำนวณส่วนลดของสินค้า 1 ชิ้น (ใช้ภายใน CheckoutAsync เท่านั้น)
-        private class PricedItem
-        {
-            public required Product Product { get; set; }
-            public required OrderItemRequestDto Request { get; set; }
-            public decimal FullLineTotal => Product.SellingPrice * Request.Quantity;
-            public decimal DiscountedLineTotal { get; set; } // จะถูกตั้งค่าตอนคำนวณ BUNDLE/PERCENT
-            public int? AssignedPromotionId { get; set; }    // null = ไม่เข้าโปรไหนเลย คิดราคาเต็ม
+            _inventoryServices = inventoryServices;
         }
 
         public async Task<ResultListReply> CheckoutAsync(CheckoutRequest request, int employeeId)
@@ -98,12 +91,12 @@ namespace Backend_ThriftFlowSystem.Services
             }
 
             //CheckSlip (option only TRANSFER)
-            if (request.PaymentMethod.ToUpper() == "TRANSFER" && (request.SlipImage == null || request.SlipImage.Length == 0))
-            {
-                reply.Result.ToErrorStatus();
-                reply.Data = "Payment slip image is required for TRANSFER method.";
-                return reply;
-            }
+            //if (request.PaymentMethod.ToUpper() == "TRANSFER" && (request.SlipImage == null || request.SlipImage.Length == 0))
+            //{
+            //    reply.Result.ToErrorStatus();
+            //    reply.Data = "Payment slip image is required for TRANSFER method.";
+            //    return reply;
+            //}
 
             //Check Permissions — Dont use SpecialPrice and SkipPromotion both
             if (request.SkipPromotion && request.SpecialPrice.HasValue)
@@ -136,7 +129,7 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                
+
                 var eligibleManagers = await _context.Employees
                     .Include(e => e.Role)
                     .Where(e => e.Role != null && (e.Role.Level == 1 || e.Role.Level == 2))
@@ -157,143 +150,97 @@ namespace Backend_ThriftFlowSystem.Services
                 approverId = manager.Id;
             }
 
+            var activeShift = await _context.POSShifts
+                .FirstOrDefaultAsync(s => s.BranchId == request.BranchId && s.Status == "OPEN");
+
+            if (activeShift == null)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "No open shift for this branch. Please have a manager open a shift first.";
+                return reply;
+            }
+
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {
-                // upload Slip Supabase
-                string? slipUrl = null;
-                if (request.SlipImage != null && request.SlipImage.Length > 0)
+                //var (totalAmount, finalDiscountAmount, netAmount, appliedPromotionIds, pricedItems) =
+                //await CalculatePricingAsync(requestItems, request.SkipPromotion, request.SpecialPrice);
+                var (totalAmount, finalDiscountAmount, netAmount, appliedPromotionIds, pricedItems) =
+                await CalculatePricingAsync(requestItems, request.SkipPromotion, request.SpecialPrice);
+
+                decimal? changeDue = null;
+                if (request.PaymentMethod.ToUpper() == "CASH")
                 {
-                    using var memoryStream = new MemoryStream();
-                    await request.SlipImage.CopyToAsync(memoryStream);
-                    var fileExtension = Path.GetExtension(request.SlipImage.FileName);
+                    if (!request.CashReceived.HasValue)
+                        throw new Exception("Cash received amount is required for CASH payment.");
 
-                    uploadedFileName = $"{Guid.NewGuid()}{fileExtension}";
+                    if (request.CashReceived.Value < netAmount)
+                        throw new Exception($"Cash received is not enough. Required: {netAmount}, Received: {request.CashReceived.Value}");
 
-                    await _supabase.Storage
-                        .From("payment-slips")
-                        .Upload(memoryStream.ToArray(), uploadedFileName, new Supabase.Storage.FileOptions { Upsert = false });
-
-                    slipUrl = _supabase.Storage.From("payment-slips").GetPublicUrl(uploadedFileName);
+                    changeDue = request.CashReceived.Value - netAmount;
                 }
 
-                decimal totalAmount = 0;
+                bool isSpecialPriceApplied = request.SpecialPrice.HasValue;
+                //decimal totalAmount = 0;
                 var orderItemsToSave = new List<OrderItem>();
                 var inventoryLogsToSave = new List<InventoryLog>();
 
-                //  วนลูปเช็คสินค้าและหักสต็อกแบบ Atomic
-                //  เก็บ Product object ไว้ใน list ต่างหากเพื่อนำไปคำนวณโปรโมชั่นในขั้นต่อไป
-                var pricedItems = new List<PricedItem>();
-
-                foreach (var item in requestItems)
+                foreach (var pi in pricedItems)
                 {
-                    var product = await _context.Products
-                        .Include(p => p.ProductLot)
-                        .FirstOrDefaultAsync(p => p.Id == item.ProductId);
+                    var product = pi.Product;
 
-                    if (product == null || !product.IsActive)
-                    {
-                        throw new Exception($"Product ID {item.ProductId} not found or inactive.");
-                    }
-
-                    int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
-                        UPDATE ""Products""
-                        SET ""QuantityInStock"" = ""QuantityInStock"" - {item.Quantity}
-                        WHERE ""Id"" = {item.ProductId} 
-                        AND ""QuantityInStock"" - {item.Quantity} >= 0");
+                    int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync(
+                    $@"
+                    UPDATE ""Products""
+                    SET ""QuantityInStock"" = ""QuantityInStock"" - {pi.Request.Quantity}
+                    WHERE ""Id"" = {product.Id} 
+                    AND ""QuantityInStock"" - {pi.Request.Quantity} >= 0");
 
                     if (rowsAffected == 0)
                     {
-                        throw new Exception($"Insufficient stock for prodoctId :{item.ProductId} '{product.Name}' (SKU: {product.SKU}). Remaining: {product.QuantityInStock}");
+                        throw new Exception($"Insufficient stock for productId: {product.Id} '{product.Name}' (SKU: {product.SKU}). Stock changed by another transaction.");
                     }
 
                     await _context.Entry(product).ReloadAsync();
-                    int newQuantity = product.QuantityInStock;
-
-                    if (newQuantity <= 0 && product.IsActive)
+                    if (product.QuantityInStock <= 0 && product.IsActive)
                     {
                         product.IsActive = false;
                         _context.Products.Update(product);
                     }
 
-                    totalAmount += product.SellingPrice * item.Quantity;
-
-                    pricedItems.Add(new PricedItem
-                    {
-                        Product = product,
-                        Request = item,
-                        DiscountedLineTotal = product.SellingPrice * item.Quantity // ค่าเริ่มต้น = ราคาเต็ม จะถูกแก้ทีหลังถ้าเข้าโปร
-                    });
-
                     inventoryLogsToSave.Add(new InventoryLog
                     {
                         EmployeeId = employeeId,
                         ActionType = "OUT_SALE",
-                        QuantityChanged = -item.Quantity,
+                        QuantityChanged = -pi.Request.Quantity,
                         Note = "Sold via POS Checkout",
                         ProductId = product.Id
                     });
-                }
 
-                //    คำนวณส่วนลดจากโปรโมชั่น
-                //    ทำงานก็ต่อเมื่อ: ไม่ได้ SkipPromotion และไม่ได้เคาะ SpecialPrice มา
-                decimal finalDiscountAmount = 0;
-                var appliedPromotionIds = new List<int>();
-
-                bool shouldApplyPromotions = !request.SkipPromotion && !request.SpecialPrice.HasValue;
-
-                if (shouldApplyPromotions)
-                {
-                    finalDiscountAmount = await ApplyPromotionsAsync(pricedItems, appliedPromotionIds);
-                }
-
-                // คำนวณยอดเงินสุทธิ
-                decimal netAmount;
-                bool isSpecialPriceApplied = false;
-
-                if (request.SpecialPrice.HasValue)
-                {
-                    if (request.SpecialPrice.Value > totalAmount)
-                    {
-                        throw new Exception("Special price cannot be greater than the total amount.");
-                    }
-
-                    netAmount = request.SpecialPrice.Value;
-                    finalDiscountAmount = totalAmount - netAmount;
-                    isSpecialPriceApplied = true;
-                }
-                else
-                {
-                    netAmount = totalAmount - finalDiscountAmount;
-                }
-
-                if (netAmount < 0) netAmount = 0;
-
-                // สร้างรายการ OrderItem (ใช้ราคาเต็มต่อหน่วยเหมือนเดิม ส่วนลดสะท้อนที่ระดับ Order รวม)
-                foreach (var pi in pricedItems)
-                {
                     orderItemsToSave.Add(new OrderItem
                     {
-                        ProductId = pi.Product.Id,
+                        ProductId = product.Id,
                         Quantity = pi.Request.Quantity,
-                        UnitPrice = pi.Product.SellingPrice,
+                        UnitPrice = product.SellingPrice,
                         SubTotal = pi.FullLineTotal,
-                        CostPrice = pi.Product.ProductLot != null ? pi.Product.ProductLot.CostPerUnit : 0
+                        CostPrice = product.ProductLot != null ? product.ProductLot.CostPerUnit : 0
                     });
                 }
 
-                //  สร้างใบเสร็จ
                 var order = new Order
                 {
-                    
                     EmployeeId = employeeId,
                     ApprovedById = approverId,
+                    POSShiftId = activeShift.Id,
+                    BranchId = activeShift.BranchId,
                     TotalAmount = totalAmount,
                     DiscountAmount = finalDiscountAmount,
                     NetAmount = netAmount,
                     PaymentMethod = request.PaymentMethod.ToUpper(),
-                    PaymentSlipUrl = slipUrl,
+                    CashReceived = request.PaymentMethod.ToUpper() == "CASH" ? request.CashReceived : null,
+                    ChangeDue = changeDue,
+                    PaymentSlipUrl = null,
                     Status = "COMPLETED",
                     PromotionId = appliedPromotionIds.FirstOrDefault() == 0 ? null : appliedPromotionIds.FirstOrDefault(),
                     AppliedPromotionIds = appliedPromotionIds.Any() ? string.Join(",", appliedPromotionIds) : null,
@@ -306,11 +253,35 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.InventoryLogs.AddRange(inventoryLogsToSave);
 
                 await _context.SaveChangesAsync();
-                order.ReceiptNumber = $"REC-{DateTime.UtcNow:yyyyMMdd}-{order.Id:D6}";
+
+                order.ReceiptNumber = $"REC-{DateTime.UtcNow:yyyyMMdd}-{order.Id:D4}";
+
+                foreach (var log in inventoryLogsToSave)
+                {
+                    log.Note = $"Receipt: {order.ReceiptNumber}";
+                }
+
+                // upload Slip Supabase
+
+                if (request.SlipImage != null && request.SlipImage.Length > 0)
+                {
+                    using var memoryStream = new MemoryStream();
+                    await request.SlipImage.CopyToAsync(memoryStream);
+                    var fileExtension = Path.GetExtension(request.SlipImage.FileName);
+
+                    uploadedFileName = $"slips/{order.ReceiptNumber}/{Guid.NewGuid()}{fileExtension}";
+
+                    await _supabase.Storage
+                        .From("payment-slips")
+                        .Upload(memoryStream.ToArray(), uploadedFileName, new Supabase.Storage.FileOptions { Upsert = false });
+
+                    order.PaymentSlipUrl = _supabase.Storage.From("payment-slips").GetPublicUrl(uploadedFileName);
+                }
+
                 await _context.SaveChangesAsync();
+
                 await transaction.CommitAsync();
 
-                // Response
                 reply.Data = new
                 {
                     OrderId = order.Id,
@@ -319,6 +290,9 @@ namespace Backend_ThriftFlowSystem.Services
                     DiscountAmount = order.DiscountAmount,
                     NetAmount = order.NetAmount,
                     PaymentMethod = order.PaymentMethod,
+                    CashReceived = order.CashReceived,
+                    ChangeDue = changeDue,
+                    PaymentSlipUrl = order.PaymentSlipUrl,
                     AppliedPromotionIds = appliedPromotionIds,
                     IsSpecialPrice = order.IsSpecialPrice,
                     IsPromotionSkipped = order.IsPromotionSkipped,
@@ -354,123 +328,311 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        // คำนวณส่วนลดของทุกสินค้าในตะกร้า แล้ว return ยอดส่วนลดรวมทั้งหมด
-        // อัปเดต pi.DiscountedLineTotal และ pi.AssignedPromotionId ของแต่ละชิ้นไปด้วย
-        private async Task<decimal> ApplyPromotionsAsync(List<PricedItem> pricedItems, List<int> appliedPromotionIds)
+        public async Task<ResultListReply> UploadSlipLaterAsync(int orderId, IFormFile slipImage, int employeeId)
+        {
+            var reply = new ResultListReply();
+            string? uploadedFileName = null;
+            try
+            {
+                var order = await _context.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
+                if (order == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Order not found.";
+                    return reply;
+                }
+
+                if (slipImage == null || slipImage.Length == 0)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "No slip image provided.";
+                    return reply;
+                }
+
+  
+                using var memoryStream = new MemoryStream();
+                await slipImage.CopyToAsync(memoryStream);
+                var fileExtension = Path.GetExtension(slipImage.FileName);
+
+  
+                uploadedFileName = $"slips/{order.ReceiptNumber}/{Guid.NewGuid()}{fileExtension}";
+
+                await _supabase.Storage
+                    .From("payment-slips")
+                    .Upload(memoryStream.ToArray(), uploadedFileName, new Supabase.Storage.FileOptions { Upsert = false });
+
+                string slipUrl = _supabase.Storage.From("payment-slips").GetPublicUrl(uploadedFileName);
+
+                order.PaymentSlipUrl = slipUrl;
+                _context.Orders.Update(order);
+
+
+                _context.SystemActionLogs.Add(new SystemActionLog
+                {
+                    EmployeeId = employeeId,
+                    ActionType = "UPDATE",
+                    TargetTable = "Orders",
+                    TargetRecordId = order.Id,
+                    Details = $"Uploaded payment slip for Order {order.ReceiptNumber} later."
+                });
+
+                await _context.SaveChangesAsync();
+
+                reply.Data = new { OrderId = order.Id, SlipUrl = slipUrl, Message = "Slip uploaded successfully." };
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error UploadSlipLaterAsync");
+
+
+                if (!string.IsNullOrEmpty(uploadedFileName))
+                {
+                    try { await _supabase.Storage.From("payment-slips").Remove(new List<string> { uploadedFileName }); }
+                    catch { /* Ignore */ }
+                }
+
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while uploading the slip.";
+            }
+            return reply;
+        }
+        //Preview Cart Before Checkout
+        public async Task<ResultListReply> CalculateCartAsync(CalculateCartRequest request)
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                if (request.Items == null || !request.Items.Any())
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Cart is empty.";
+                    return reply;
+                }
+
+                if (request.Items.Any(i => i.Quantity <= 0))
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid item quantity. All quantities must be greater than zero.";
+                    return reply;
+                }
+
+                var mergedItems = request.Items
+                    .GroupBy(x => x.ProductId)
+                    .Select(g => new OrderItemRequestDto { ProductId = g.Key, Quantity = g.Sum(x => x.Quantity) })
+                    .ToList();
+
+                var (totalAmount, discountAmount, netAmount, appliedPromotionIds, pricedItems) =
+                    await CalculatePricingAsync(mergedItems, skipPromotion: false, specialPrice: null);
+
+                reply.Data = new CartPreviewResponse
+                {
+                    TotalAmount = totalAmount,
+                    DiscountAmount = discountAmount,
+                    NetAmount = netAmount,
+                    AppliedPromotionIds = appliedPromotionIds,
+                    Items = pricedItems.Select(pi => new CartItemPreview
+                    {
+                        ProductId = pi.Product.Id,
+                        Name = pi.Product.Name,
+                        SKU = pi.Product.SKU,
+                        Quantity = pi.Request.Quantity,
+                        UnitPrice = pi.Product.SellingPrice,
+                        FullLineTotal = pi.FullLineTotal,
+                        DiscountedLineTotal = pi.DiscountedLineTotal,
+                        AppliedPromotionId = pi.AssignedPromotionId
+                    }).ToList()
+                };
+
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error CalculateCartAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = ex.Message;
+            }
+            return reply;
+        }
+
+        private async Task<(decimal totalAmount, decimal discountAmount, decimal netAmount, List<int> appliedPromotionIds, List<PricedItem> pricedItems)>
+            CalculatePricingAsync(List<OrderItemRequestDto> requestItems, bool skipPromotion, decimal? specialPrice)
+        {
+            decimal totalAmount = 0;
+            var pricedItems = new List<PricedItem>();
+
+            foreach (var item in requestItems)
+            {
+                var product = await _context.Products
+                    .Include(p => p.ProductLot)
+                    .FirstOrDefaultAsync(p => p.Id == item.ProductId);
+
+                if (product == null || !product.IsActive)
+                {
+                    throw new Exception($"Product ID {item.ProductId} not found or inactive.");
+                }
+
+                if (product.QuantityInStock < item.Quantity)
+                {
+                    throw new Exception($"Insufficient stock for productId: {item.ProductId} '{product.Name}' (SKU: {product.SKU}). Remaining: {product.QuantityInStock}");
+                }
+
+                totalAmount += product.SellingPrice * item.Quantity;
+
+                pricedItems.Add(new PricedItem
+                {
+                    Product = product,
+                    Request = item,
+                    DiscountedLineTotal = product.SellingPrice * item.Quantity
+                });
+            }
+
+            decimal finalDiscountAmount = 0;
+            var appliedPromotionIds = new List<int>();
+            bool shouldApplyPromotions = !skipPromotion && !specialPrice.HasValue;
+
+            if (shouldApplyPromotions)
+            {
+
+                (finalDiscountAmount, pricedItems) = await ApplyPromotionsAsync(pricedItems, appliedPromotionIds);
+
+            }
+
+            decimal netAmount;
+            if (specialPrice.HasValue)
+            {
+                if (specialPrice.Value > totalAmount)
+                    throw new Exception("Special price cannot be greater than the total amount.");
+
+                netAmount = specialPrice.Value;
+                finalDiscountAmount = totalAmount - netAmount;
+            }
+            else
+            {
+                netAmount = totalAmount - finalDiscountAmount;
+            }
+
+            if (netAmount < 0) netAmount = 0;
+
+            return (totalAmount, finalDiscountAmount, netAmount, appliedPromotionIds, pricedItems);
+        }
+
+        private async Task<(decimal, List<PricedItem>)> ApplyPromotionsAsync(List<PricedItem> originalItems, List<int> appliedPromotionIds)
         {
             var now = DateTime.UtcNow;
-
-            // ดึงโปรที่ Active อยู่ ณ ตอนนี้ทั้งหมด ไม่รับ PromotionId จาก client เลย
             var activePromotions = await _context.Promotions
                 .Where(p => p.IsActive && p.StartDate <= now && p.EndDate >= now)
                 .ToListAsync();
 
-            if (!activePromotions.Any())
-            {
-                return 0; 
-            }
+            if (!activePromotions.Any()) return (0, originalItems);
 
-            // ลำดับความเจาะจง: Lot (1) > Category (2) > ทั้งร้าน (3)
-            foreach (var pi in pricedItems)
+            // แตกสินค้าทุกชิ้นเป็นชิ้นเดี่ยวใน Memory (Flattening)
+            var units = new List<UnitItem>();
+            foreach (var pi in originalItems)
             {
-                var candidates = activePromotions.Where(promo => IsProductEligible(pi.Product, promo)).ToList();
-
-                if (!candidates.Any())
+                for (int i = 0; i < pi.Request.Quantity; i++)
                 {
-                    pi.AssignedPromotionId = null; 
-                    continue;
+                    units.Add(new UnitItem
+                    {
+                        Product = pi.Product,
+                        OriginalPrice = pi.Product.SellingPrice,
+                        DiscountedPrice = pi.Product.SellingPrice,
+                        AssignedPromotionId = null
+                    });
                 }
-
-                // เลือกโปรที่เจาะจงที่สุดก่อน ถ้าเสมอกันในระดับเดียวกัน เลือกตัวที่ Id ใหม่สุด 
-                var chosen = candidates
-                    .OrderBy(promo => GetSpecificityRank(promo))   // 1 = เจาะจงสุด มาก่อน
-                    .ThenByDescending(promo => promo.Id)            // เสมอกัน -> ใหม่สุดชนะ
-                    .First();
-
-                pi.AssignedPromotionId = chosen.Id;
             }
-
-            // กลุ่มสินค้าตาม AssignedPromotionId ที่จับคู่ได้
-            var groups = pricedItems
-                .Where(pi => pi.AssignedPromotionId.HasValue)
-                .GroupBy(pi => pi.AssignedPromotionId!.Value);
 
             decimal totalDiscount = 0;
+            var appliedIds = new HashSet<int>();
 
-            // คำนวณส่วนลดของแต่ละกลุ่ม ตามประเภทโปรของกลุ่มนั้น
-            //  คำนวณจากยอดของ "กลุ่มนี้เท่านั้น" ห้าม totalAmount รวมทั้งบิล
-            foreach (var group in groups)
+            // เรียงลำดับโปรโมชั่น เอา BUNDLE ขึ้นก่อนPERCENT เสมอและเรียงความเจาะจง
+            var sortedPromos = activePromotions
+                .OrderByDescending(p => p.PromotionType == "BUNDLE")
+                .ThenBy(p => GetSpecificityRank(p))
+                .ThenByDescending(p => p.Id)
+                .ToList();
+
+            foreach (var promo in sortedPromos)
             {
-                var promo = activePromotions.First(p => p.Id == group.Key);
-                var groupItems = group.ToList();
-                decimal groupFullTotal = groupItems.Sum(pi => pi.FullLineTotal);
-                decimal groupDiscount = 0;
+                // หาสินค้า ที่ยังไม่ได้โปร และเข้าเงื่อนไข
+                var eligibleUnits = units.Where(u => u.AssignedPromotionId == null && IsProductEligible(u.Product, promo)).ToList();
 
-                if (promo.PromotionType == "BUNDLE" && promo.BundlePrice.HasValue
-                    && promo.ConditionQuantity.HasValue && promo.ConditionQuantity.Value > 0)
+                if (!eligibleUnits.Any()) continue;
+
+                if (promo.PromotionType == "BUNDLE" && promo.ConditionQuantity.HasValue && promo.BundlePrice.HasValue)
                 {
-                    groupDiscount = CalculateBundleDiscount(groupItems, promo, out var perItemDiscountedTotal);
-
-                    // เก็บราคาหลังลดต่อชิ้นไว้เผื่อใช้แสดงผลละเอียดในอนาคต 
-                    foreach (var pi in groupItems)
+                    int condQty = promo.ConditionQuantity.Value;
+                    if (eligibleUnits.Count >= condQty)
                     {
-                        pi.DiscountedLineTotal = perItemDiscountedTotal.TryGetValue(pi, out var val) ? val : pi.FullLineTotal;
+                        // นำของราคาถูกที่สุดมาเข้าเซ็ตก่อนเพื่อรักษากำไรของร้าน Margin
+                        var sortedEligible = eligibleUnits.OrderBy(u => u.OriginalPrice).ToList();
+                        int sets = sortedEligible.Count / condQty;
+                        int unitsToApply = sets * condQty;
+
+                        decimal bundlePrice = promo.BundlePrice.Value;
+                        decimal normalPriceOfBundledUnits = sortedEligible.Take(unitsToApply).Sum(u => u.OriginalPrice);
+                        decimal discountForThisPromo = normalPriceOfBundledUnits - (sets * bundlePrice);
+                        if (discountForThisPromo < 0) discountForThisPromo = 0;
+
+                        // อัปเดตราคาสินค้าที่ถูกดึงเข้าเซ็ต
+                        for (int i = 0; i < unitsToApply; i++)
+                        {
+                            var u = sortedEligible[i];
+                            u.AssignedPromotionId = promo.Id;
+                            decimal shareRatio = normalPriceOfBundledUnits == 0 ? 0 : u.OriginalPrice / normalPriceOfBundledUnits;
+                            u.DiscountedPrice = u.OriginalPrice - Math.Round(discountForThisPromo * shareRatio, 2);
+                        }
+                        totalDiscount += discountForThisPromo;
+                        appliedIds.Add(promo.Id);
                     }
                 }
                 else if (promo.PromotionType == "PERCENT")
                 {
-                    // PERCENT ไม่เช็ค ConditionQuantity เลย — ลดทุกชิ้นที่เข้าเงื่อนไข Category/Lot ทันที
-                    groupDiscount = Math.Round(groupFullTotal * (promo.DiscountValue / 100m), 2);
-
-                    foreach (var pi in groupItems)
+                    // เศษที่รอดจาก Bundle จะไหลมาโดนตรงนี้แทน
+                    foreach (var u in eligibleUnits)
                     {
-                        decimal itemShareRatio = pi.FullLineTotal / groupFullTotal;
-                        pi.DiscountedLineTotal = pi.FullLineTotal - Math.Round(groupDiscount * itemShareRatio, 2);
-                    }
-                }
-                else
-                {
-                    // โปร type อื่นที่ไม่รองรับ หรือ BUNDLE ที่ตั้งค่าไม่ครบ (ไม่มี BundlePrice/ConditionQuantity)
-                    // -> ไม่ลดอะไรเลย ปฏิบัติเหมือนไม่เข้าโปร เพื่อความปลอดภัย (fail-safe ไม่ใช่ fail-discount)
-                    groupDiscount = 0;
-                }
-
-                if (groupDiscount > 0)
-                {
-                    totalDiscount += groupDiscount;
-                    if (!appliedPromotionIds.Contains(promo.Id))
-                    {
-                        appliedPromotionIds.Add(promo.Id);
+                        u.AssignedPromotionId = promo.Id;
+                        decimal discount = Math.Round(u.OriginalPrice * (promo.DiscountValue / 100m), 2);
+                        u.DiscountedPrice = u.OriginalPrice - discount;
+                        totalDiscount += discount;
+                        appliedIds.Add(promo.Id);
                     }
                 }
             }
 
-            return totalDiscount;
+            // รวบรวมชิ้นเดี่ยว กลับเป็นบรรทัดใบเสร็จ จัดกลุ่มตาม ID สินค้า และ โปรโมชั่นที่ได้รับ
+            var newPricedItems = new List<PricedItem>();
+            var groupedUnits = units.GroupBy(u => new { u.Product.Id, u.AssignedPromotionId });
+
+            foreach (var g in groupedUnits)
+            {
+                var firstUnit = g.First();
+                int qty = g.Count();
+                decimal discountedTotal = g.Sum(u => u.DiscountedPrice);
+
+                newPricedItems.Add(new PricedItem
+                {
+                    Product = firstUnit.Product,
+                    Request = new OrderItemRequestDto { ProductId = firstUnit.Product.Id, Quantity = qty },
+                    DiscountedLineTotal = discountedTotal,
+                    AssignedPromotionId = firstUnit.AssignedPromotionId
+                });
+            }
+
+            appliedPromotionIds.AddRange(appliedIds);
+            return (totalDiscount, newPricedItems);
         }
 
-        // เช็คว่าสินค้าชิ้นนี้ "เข้าเงื่อนไข" โปรนี้ไหม (ไม่สนใจเรื่อง ConditionQuantity ตรงนี้ แค่เช็คว่า "ประเภทสินค้าตรงกับกฎไหม")
         private bool IsProductEligible(Product product, Promotion promo)
         {
-            //Unique (IsGenericSKU = false) ห้ามเข้า BUNDLE เด็ดขาด ไม่ว่า Category/Lot จะตรงแค่ไหน
-            if (!product.IsGenericSKU && promo.PromotionType == "BUNDLE")
-            {
-                return false;
-            }
-
-            if (promo.ApplicableProductLotId.HasValue)
-            {
-                return product.ProductLotId == promo.ApplicableProductLotId.Value;
-            }
-
-            if (promo.ApplicableCategoryId.HasValue)
-            {
-                return product.CategoryId == promo.ApplicableCategoryId.Value;
-            }
-
-            return true; 
+            if (!product.IsGenericSKU && promo.PromotionType == "BUNDLE") return false;
+            if (promo.ApplicableProductLotId.HasValue && product.ProductLotId != promo.ApplicableProductLotId.Value) return false;
+            if (promo.ApplicableCategoryId.HasValue && product.CategoryId != promo.ApplicableCategoryId.Value) return false;
+            return true;
         }
 
-       
         private int GetSpecificityRank(Promotion promo)
         {
             if (promo.ApplicableProductLotId.HasValue) return 1; // เจาะจงสุด
@@ -478,72 +640,471 @@ namespace Backend_ThriftFlowSystem.Services
             return 3; // ทั้งร้าน กว้างที่สุด
         }
 
-        // คำนวณส่วนลดของกลุ่มสินค้าที่เข้าโปร BUNDLE เดียวกัน
-        // ถูกสุดจัดเซ็ตก่อน (รักษา margin), เศษที่จัดเซ็ตไม่ครบคิดราคาเต็ม
-        private decimal CalculateBundleDiscount(List<PricedItem> groupItems, Promotion promo, out Dictionary<PricedItem, decimal> perItemDiscountedTotal)
+        //เก็บผลลัพธ์การคำนวณส่วนลดของสินค้า 1 ชิ้น ใช้ภายใน CheckoutAsync เท่านั้น
+        private class PricedItem
         {
-            perItemDiscountedTotal = new Dictionary<PricedItem, decimal>();
-
-
-            var units = new List<(PricedItem Parent, decimal UnitPrice)>();
-            foreach (var pi in groupItems)
-            {
-                for (int i = 0; i < pi.Request.Quantity; i++)
-                {
-                    units.Add((pi, pi.Product.SellingPrice));
-                }
-            }
-
-            // ถูกสุดมาก่อน เพื่อจัดเข้าเซ็ตลดราคาก่อน (รักษา margin ของร้าน)
-            var sortedUnits = units.OrderBy(u => u.UnitPrice).ToList();
-
-            int conditionQty = promo.ConditionQuantity!.Value;
-            decimal bundlePrice = promo.BundlePrice!.Value;
-
-            int totalUnits = sortedUnits.Count;
-            int setsCount = totalUnits / conditionQty;          // จำนวนเซ็ตที่จัดได้ครบ
-            int leftoverCount = totalUnits % conditionQty;       // เศษที่ไม่ครบเซ็ต คิดราคาเต็ม
-
-            decimal discountedTotal = (setsCount * bundlePrice)
-                + sortedUnits.Skip(setsCount * conditionQty).Take(leftoverCount).Sum(u => u.UnitPrice);
-
-            decimal fullTotal = sortedUnits.Sum(u => u.UnitPrice);
-            decimal discount = fullTotal - discountedTotal;
-            if (discount < 0) discount = 0;
-
-            foreach (var pi in groupItems)
-            {
-           
-                decimal shareRatio = fullTotal == 0 ? 0 : pi.FullLineTotal / fullTotal;
-                perItemDiscountedTotal[pi] = pi.FullLineTotal - Math.Round(discount * shareRatio, 2);
-            }
-
-            return Math.Round(discount, 2);
+            public required Product Product { get; set; }
+            public required OrderItemRequestDto Request { get; set; }
+            public decimal FullLineTotal => Product.SellingPrice * Request.Quantity;
+            public decimal DiscountedLineTotal { get; set; } // จะถูกตั้งค่าตอนคำนวณ BUNDLE/PERCENT
+            public int? AssignedPromotionId { get; set; }    // null = ไม่เข้าโปรไหนเลย คิดราคาเต็ม
         }
 
-        
-        private async Task<string> GenerateReceiptNumberAsync()
+        private class UnitItem
         {
-            var todayStr = DateTime.UtcNow.ToString("yyyyMMdd");
-            var todayDate = DateTime.UtcNow.Date;
-            var tomorrowDate = todayDate.AddDays(1);
+            public required Product Product { get; set; }
+            public decimal OriginalPrice { get; set; }
+            public decimal DiscountedPrice { get; set; }
+            public int? AssignedPromotionId { get; set; }
+        }
 
-            var lastOrder = await _context.Orders
-                .Where(o => o.CreatedAt >= todayDate && o.CreatedAt < tomorrowDate)
-                .OrderByDescending(o => o.Id)
-                .FirstOrDefaultAsync();
-
-            int runningNumber = 1;
-            if (lastOrder != null && lastOrder.ReceiptNumber.StartsWith($"REC-{todayStr}-"))
+        public async Task<ResultListReply> SearchOrderByReceiptAsync(string receiptNumber)
+        {
+            var reply = new ResultListReply();
+            try
             {
-                var lastRunningStr = lastOrder.ReceiptNumber.Replace($"REC-{todayStr}-", "");
-                if (int.TryParse(lastRunningStr, out int lastNumber))
+                if (string.IsNullOrWhiteSpace(receiptNumber))
                 {
-                    runningNumber = lastNumber + 1;
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Receipt number is required.";
+                    return reply;
                 }
+
+                // ดึงข้อมูลบิล, รายการสินค้า และประวัติการคืนเงิน
+                var order = await _context.Orders
+                    .Include(o => o.OrderItems).ThenInclude(oi => oi.Product)
+                    .Include(o => o.Refunds)
+                    .FirstOrDefaultAsync(o => o.ReceiptNumber == receiptNumber.Trim());
+
+                if (order == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Order not found.";
+                    return reply;
+                }
+
+                
+                var response = new
+                {
+                    OrderId = order.Id,
+                    ReceiptNumber = order.ReceiptNumber,
+                    TotalAmount = order.TotalAmount,
+                    NetAmount = order.NetAmount,
+                    PaymentMethod = order.PaymentMethod,      
+                    CashReceived = order.CashReceived,
+                    ChangeDue = order.ChangeDue,
+                    CreatedAt = order.CreatedAt,
+                    Items = order.OrderItems.Select(oi => {
+
+                        // คำนวณยอดที่คืนได้สูงสุด
+                        int refundedQty = order.Refunds?
+                       .Where(r => r.ProductId == oi.ProductId)
+                       .Sum(r => r.Quantity) ?? 0;
+                        // สัดส่วนราคาที่จ่ายจริง
+                        decimal paidRatio = order.TotalAmount > 0 ? (order.NetAmount / order.TotalAmount) : 0;
+                        // ราคาต่อหน่วยที่ลูกค้าจ่ายจริง  หลังหักส่วนลดแล้ว  
+                        decimal unitPriceAfterDiscount = Math.Round(oi.UnitPrice * paidRatio, 2);
+                        return new
+                        {
+                            ProductId = oi.ProductId,
+                            Name = oi.Product?.Name ?? "Unknown",
+                            SKU = oi.Product?.SKU ?? "N/A",
+                            PurchasedQuantity = oi.Quantity,
+                            RefundedQuantity = refundedQty,
+                            RemainingRefundable = oi.Quantity - refundedQty,
+                            UnitPrice = oi.UnitPrice,
+                            EffectiveUnitPrice = unitPriceAfterDiscount,
+                            SubTotal = oi.SubTotal,
+                            EffectiveSubTotal = Math.Round(unitPriceAfterDiscount * oi.Quantity, 2)
+                        };
+                    }).ToList()
+                };
+
+                reply.Data = response;
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error SearchOrderByReceiptAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An unexpected error occurred.";
             }
 
-            return $"REC-{todayStr}-{runningNumber:D4}";
+            return reply;
+        }
+
+        public async Task<ResultListReply> ProcessRefundAsync(RefundRequestDto request, int employeeId)
+        {
+            var reply = new ResultListReply();
+            int? approverId = null;
+
+            if (string.IsNullOrWhiteSpace(request.ManagerPin))
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "Manager PIN is required to process a refund.";
+                return reply;
+            }
+            var eligibleManagers = await _context.Employees
+            .Include(e => e.Role)
+            .Where(e => e.Role != null && (e.Role.Level == 1 || e.Role.Level == 2))
+            .ToListAsync();
+
+            var manager = eligibleManagers.FirstOrDefault(m =>
+            BCrypt.Net.BCrypt.Verify(request.ManagerPin, m.PinHash));
+
+            if (manager == null)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "Invalid PIN or insufficient permissions. Manager or Owner approval is required.";
+                return reply;
+            }
+            approverId = manager.Id;
+
+            var order = await _context.Orders
+            .Include(o => o.OrderItems)
+            .Include(o => o.Refunds)
+            .FirstOrDefaultAsync(o => o.Id == request.OriginalOrderId);
+
+            if (order == null)
+            {
+                reply.Result.ToErrorStatus();
+                reply.Data = "Original order not found.";
+                return reply;
+            }
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var refundsToSave = new List<Refund>();
+
+                // วนลูปจัดการสินค้าที่ขอคืนทีละตัว
+                foreach (var item in request.Items)
+                {
+                    var orderItem = order.OrderItems.FirstOrDefault(oi => oi.ProductId == item.ProductId);
+                    if (orderItem == null)
+                    {
+                        throw new Exception($"Product ID {item.ProductId} was not found in this order.");
+                    }
+
+                    // คำนวณยอดที่เคยคืนไปแล้ว เพื่อบล็อกการคืนเกินจำนวน
+                    int alreadyRefundedQty = order.Refunds
+                        .Where(r => r.ProductId == item.ProductId)
+                        .Sum(r => r.Quantity);
+
+                    if (alreadyRefundedQty + item.Quantity > orderItem.Quantity)
+                    {
+                        throw new Exception($"Cannot refund {item.Quantity} units of Product ID {item.ProductId}. Only {orderItem.Quantity - alreadyRefundedQty} units left eligible.");
+                    }
+
+                    var stockRequest = new StockAdjustRequest
+                    {
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        ActionType = ActionTypes.InReturn,
+                        Note = $"Refund from Order #{request.OriginalOrderId}: {request.Reason}"
+                    };
+
+                    var stockResult = await _inventoryServices.AdjustStockAsync(stockRequest, approverId.Value, request.ManagerPin);
+                    if (stockResult.Result.Value == "F")
+                    {
+                        throw new Exception($"Stock Adjustment Failed for Product {item.ProductId}: {stockResult.Data}");
+                    }
+
+                    decimal itemFullPrice = orderItem.UnitPrice * item.Quantity; 
+
+                    // ป้องกันหารด้วย 0 และคำนวณสัดส่วน 
+                    decimal paidRatio = order.TotalAmount > 0 ? (order.NetAmount / order.TotalAmount) : 0;
+
+                    // ยอดที่ต้องควักเงินคืนลูกค้าจริง
+                    decimal actualRefundAmount = Math.Round(itemFullPrice * paidRatio, 2);
+
+                    refundsToSave.Add(new Refund
+                    {
+                        OrderId = request.OriginalOrderId,
+                        ProductId = item.ProductId,
+                        Quantity = item.Quantity,
+                        RefundAmount = actualRefundAmount, 
+                        Reason = request.Reason,
+                        EmployeeId = employeeId,
+                        ApprovedById = approverId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                _context.Refunds.AddRange(refundsToSave);
+                await _context.SaveChangesAsync();
+
+                var allRefunds = await _context.Refunds
+                .Where(r => r.OrderId == request.OriginalOrderId)
+                .ToListAsync();
+
+                bool isFullyRefunded = order.OrderItems.All(oi =>
+                allRefunds.Where(r => r.ProductId == oi.ProductId)
+                .Sum(r => r.Quantity) >= oi.Quantity);
+
+                // Refunded_คืนั้งหมด, PartialRefund_คืนบางส่วน
+                order.Status = isFullyRefunded ? "REFUNDED" : "PARTIAL_REFUNDED";
+
+                await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+
+                reply.Data = new
+                {
+                    Refunds = refundsToSave.Select(r => new
+                    {
+                        Id = r.Id,
+                        OrderId = r.OrderId,
+                        ProductId = r.ProductId,
+                        Quantity = r.Quantity,
+                        RefundAmount = r.RefundAmount,
+                        Reason = r.Reason,
+                        CreatedAt = r.CreatedAt
+                        
+                    }),
+
+                    
+                    ApprovedBy = new
+                    {
+                        Id = manager.Id,
+                        Name = manager.FirstName,
+                        RoleName = manager.Role?.RoleName ?? "Unknown"
+                    }
+                };
+                reply.Result.ToSuccessStatus("201");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError(ex, "Error ProcessRefundAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while processing the refund.";
+            }
+
+            return reply;
+        }
+
+        public async Task<ResultListReply> GetActiveShiftAsync(int branchId)
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                var activeShift = await _context.POSShifts
+                    .Include(s => s.Branch)
+                    .FirstOrDefaultAsync(s => s.BranchId == branchId && s.Status == "OPEN");
+
+                if (activeShift == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "No active shift found for this branch.";
+                    return reply;
+                }
+
+                reply.Data = activeShift;
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+                return reply;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error GetActiveShiftAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while processing the GetActiveShift.";
+            }
+            return reply;
+        }
+
+        public async Task<ResultListReply> OpenShiftAsync(int employeeId, OpenShiftRequest request)
+        {
+            var reply = new ResultListReply();
+
+            try
+            {
+                var existingShift = await _context.POSShifts
+                    .FirstOrDefaultAsync(s => s.BranchId == request.BranchId && s.Status == "OPEN");
+
+                if (existingShift != null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "This branch already has an open shift.";
+                    return reply;
+                }
+
+                var newShift = new POSShift
+                {
+                    EmployeeId = employeeId,
+                    BranchId = request.BranchId,
+                    StartingCash = request.StartingCash,
+                    ExpectedCash = request.StartingCash, // Expected = Starting
+                    ActualCash = 0,
+                    Difference = 0,
+                    Status = "OPEN",
+                    StartTime = DateTime.UtcNow
+                };
+
+                _context.POSShifts.Add(newShift);
+                await _context.SaveChangesAsync();
+
+                reply.Data = new { ShiftId = newShift.Id, Message = "Shift opened successfully." };
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error OpenShiftAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while OpenShiftAsync.";
+            }
+            return reply;
+        }
+
+        public async Task<ResultListReply> CloseShiftAsync(int shiftId, int employeeId, CloseShiftRequest request)
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                var shift = await _context.POSShifts.FirstOrDefaultAsync(s => s.Id == shiftId);
+
+                if (shift == null || shift.Status == "CLOSED")
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Shift not found or already closed.";
+                    return reply;
+                }
+
+                // คำนวณยอดขาย "เงินสด" ทั้งหมดที่เกิดขึ้นในกะนี้
+                var totalCashSales = await _context.Orders
+                    .Where(o => o.POSShiftId == shiftId && o.Status == "COMPLETED" && o.PaymentMethod == "CASH")
+                    .SumAsync(o => o.NetAmount);
+
+                // ยอดเงินที่ควรมี = ทอนตั้งต้น + ยอดขายเงินสด + เงินที่เติมเข้า - เงินที่ดึงออก
+                shift.ExpectedCash = shift.StartingCash + totalCashSales + shift.CashInAmount - shift.CashOutAmount;
+
+                shift.ActualCash = request.ActualCash;
+
+                // ส่วนต่าง = นับได้จริง - ที่ควรมี (ถ้าติดลบแปลว่าเงินหาย)
+                shift.Difference = shift.ActualCash - shift.ExpectedCash;
+
+                shift.EndTime = DateTime.UtcNow;
+                shift.Status = "CLOSED";
+                shift.Remarks = $"[Closed by EmpID: {employeeId}] " + request.Remarks;
+
+                _context.POSShifts.Update(shift);
+                await _context.SaveChangesAsync();
+
+                reply.Data = new
+                {
+                    Message = "Shift closed successfully.",
+                    ExpectedCash = shift.ExpectedCash,
+                    ActualCash = shift.ActualCash,
+                    Difference = shift.Difference
+                };
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error CloseShiftAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while CloseShiftAsync.";
+            }
+            return reply;
+        }
+
+        public async Task<ResultListReply> AddCashTransactionAsync(int branchId, int employeeId, CashTransactionRequest request)
+        {
+            var reply = new ResultListReply();
+            try
+            {
+                int? approverId = null;
+                string? approverName = null;
+                if (request.TransactionType.ToUpper() == "CASH_OUT")
+                {
+                    if (string.IsNullOrWhiteSpace(request.ManagerPin))
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Manager PIN is required for Cash Out.";
+                        return reply;
+                    }
+
+                    var eligibleManagers = await _context.Employees
+                        .Include(e => e.Role)
+                        .Where(e => e.Role != null && (e.Role.Level == 1 || e.Role.Level == 2))
+                        .ToListAsync();
+
+                    var manager = eligibleManagers.FirstOrDefault(m =>
+                        BCrypt.Net.BCrypt.Verify(request.ManagerPin, m.PinHash)
+                    );
+
+                    if (manager == null)
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Invalid PIN or insufficient permissions. Manager or Owner approval is required for Cash Out.";
+                        return reply;
+                    }
+
+                    approverId = manager.Id;
+                    approverName = $"{manager.FirstName} {manager.LastName}".Trim(); ;
+                }
+
+                var activeShift = await _context.POSShifts
+                    .FirstOrDefaultAsync(s => s.BranchId == branchId && s.Status == "OPEN");
+
+                if (activeShift == null)
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "No active shift found. Please open a shift first.";
+                    return reply;
+                }
+
+                if (request.TransactionType.ToUpper() == "CASH_IN")
+                {
+                    activeShift.CashInAmount += request.Amount;
+                }
+                else if (request.TransactionType.ToUpper() == "CASH_OUT")
+                {
+                    activeShift.CashOutAmount += request.Amount;
+                }
+                else
+                {
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Invalid TransactionType. Use 'CASH_IN' or 'CASH_OUT'.";
+                    return reply;
+                }
+
+                string approverLog = approverId.HasValue ? $" | ApprovedBy: {approverName}" : "";
+
+                _context.SystemActionLogs.Add(new SystemActionLog
+                {
+                    EmployeeId = employeeId, 
+                    ActionType = request.TransactionType.ToUpper(),
+                    TargetTable = "POSShifts",
+                    TargetRecordId = activeShift.Id,
+                    Details = $"Amount: {request.Amount} | Remark: {request.Remarks}{approverLog}"
+                });
+
+                _context.POSShifts.Update(activeShift);
+                await _context.SaveChangesAsync();
+
+                reply.Data = new
+                {
+                    Message = "Cash transaction recorded successfully.",
+                    CurrentCashIn = activeShift.CashInAmount,
+                    CurrentCashOut = activeShift.CashOutAmount
+                };
+                reply.Result.ToSuccessStatus("200");
+                reply.ToSuccessStatus();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in AddCashTransactionAsync");
+                reply.Result.ToErrorStatus();
+                reply.Data = _env.IsDevelopment() ? ex.Message : "An error occurred while processing cash transaction.";
+            }
+
+            return reply;
         }
     }
 }
