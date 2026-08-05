@@ -35,6 +35,9 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<int?>("ActorId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Details")
                         .HasColumnType("text");
 
@@ -50,7 +53,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("UserAgent")
                         .HasMaxLength(500)
@@ -58,9 +61,44 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ActorId");
+
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("AuthLogs");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Branch", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BranchName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LocationDetails")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Branches");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            BranchName = "Main Store",
+                            IsActive = true
+                        });
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Category", b =>
@@ -98,7 +136,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -158,7 +196,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -166,7 +204,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(150)");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("InvitationToken")
                         .IsRequired()
@@ -223,7 +261,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
@@ -262,8 +300,17 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Property<int?>("ApprovedById")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("CashReceived")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ChangeDue")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<decimal>("DiscountAmount")
                         .HasColumnType("decimal(18,2)");
@@ -279,6 +326,9 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.Property<decimal>("NetAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("POSShiftId")
+                        .HasColumnType("integer");
 
                     b.Property<string>("PaymentMethod")
                         .IsRequired()
@@ -309,7 +359,11 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.HasIndex("ApprovedById");
 
+                    b.HasIndex("BranchId");
+
                     b.HasIndex("EmployeeId");
+
+                    b.HasIndex("POSShiftId");
 
                     b.HasIndex("PromotionId");
 
@@ -351,6 +405,62 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.ToTable("OrderItems");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.POSShift", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("ActualCash")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("BranchId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("CashInAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("CashOutAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Difference")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("ExpectedCash")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Remarks")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<decimal>("StartingCash")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BranchId");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("POSShifts");
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.PasswordResetToken", b =>
                 {
                     b.Property<int>("Id")
@@ -360,13 +470,13 @@ namespace Backend_ThriftFlowSystem.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("ExpiredTime")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -391,7 +501,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Detail")
                         .HasColumnType("text");
@@ -474,7 +584,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(150)");
 
                     b.Property<DateTime>("ReceivedDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<int>("ReceivedQuantity")
                         .HasColumnType("integer");
@@ -520,7 +630,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("EndDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -536,7 +646,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(20)");
 
                     b.Property<DateTime>("StartDate")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
@@ -545,6 +655,52 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.HasIndex("ApplicableProductLotId");
 
                     b.ToTable("Promotions");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Refund", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ApprovedById")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("OrderId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedById");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("OrderId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("Refunds");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Role", b =>
@@ -572,6 +728,57 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.ToTable("Roles");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.StoreProfile", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("ReceiptFooter")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("StoreName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("TaxId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("StoreProfiles");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Address = "Thailand",
+                            Phone = "",
+                            ReceiptFooter = "Thank you for shopping!",
+                            StoreName = "THRIFT FLOW",
+                            TaxId = ""
+                        });
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Supplier", b =>
                 {
                     b.Property<int>("Id")
@@ -585,7 +792,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(250)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -614,7 +821,7 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Details")
                         .HasMaxLength(255)
@@ -640,9 +847,15 @@ namespace Backend_ThriftFlowSystem.Migrations
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.AuthLog", b =>
                 {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "ActorEmployee")
+                        .WithMany()
+                        .HasForeignKey("ActorId");
+
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId");
+
+                    b.Navigation("ActorEmployee");
 
                     b.Navigation("Employee");
                 });
@@ -694,11 +907,19 @@ namespace Backend_ThriftFlowSystem.Migrations
                         .WithMany()
                         .HasForeignKey("ApprovedById");
 
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId");
+
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
                         .WithMany()
                         .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.POSShift", "POSShift")
+                        .WithMany()
+                        .HasForeignKey("POSShiftId");
 
                     b.HasOne("Backend_ThriftFlowSystem.Models.Promotion", "Promotion")
                         .WithMany()
@@ -706,7 +927,11 @@ namespace Backend_ThriftFlowSystem.Migrations
 
                     b.Navigation("ApprovedBy");
 
+                    b.Navigation("Branch");
+
                     b.Navigation("Employee");
+
+                    b.Navigation("POSShift");
 
                     b.Navigation("Promotion");
                 });
@@ -728,6 +953,25 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Navigation("Order");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.POSShift", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Branch", "Branch")
+                        .WithMany()
+                        .HasForeignKey("BranchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Branch");
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.PasswordResetToken", b =>
@@ -784,6 +1028,39 @@ namespace Backend_ThriftFlowSystem.Migrations
                     b.Navigation("ApplicableProductLot");
                 });
 
+            modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Refund", b =>
+                {
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "ApprovedBy")
+                        .WithMany()
+                        .HasForeignKey("ApprovedById");
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Order", "Order")
+                        .WithMany("Refunds")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Backend_ThriftFlowSystem.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedBy");
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Order");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.SystemActionLog", b =>
                 {
                     b.HasOne("Backend_ThriftFlowSystem.Models.Employee", "Employee")
@@ -803,6 +1080,8 @@ namespace Backend_ThriftFlowSystem.Migrations
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.Order", b =>
                 {
                     b.Navigation("OrderItems");
+
+                    b.Navigation("Refunds");
                 });
 
             modelBuilder.Entity("Backend_ThriftFlowSystem.Models.ProductLot", b =>
