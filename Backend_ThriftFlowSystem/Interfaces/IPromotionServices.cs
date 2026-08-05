@@ -7,6 +7,6 @@ namespace Backend_ThriftFlowSystem.Interfaces
         Task<ResultListReply> GetAllPromotionsAsync(bool onlyActive = false);
         Task<ResultListReply> CreatePromotionAsync(PromotionRequestDto request, int employeeId);
         Task<ResultListReply> UpdatePromotionAsync(int id, PromotionRequestDto request, int employeeId);
-        Task<ResultListReply> DeletePromotionAsync(int id);
+        Task<ResultListReply> TogglePromotionActiveAsync(int id, int employeeId);
     }
 }

@@ -48,6 +48,54 @@ namespace Backend_ThriftFlowSystem.Services
             var reply = new ResultListReply();
             try
             {
+                if (request.EndDate <= request.StartDate)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.CreateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to create promotion: {request.Name} - Invalid date range (EndDate is before or equal to StartDate)"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "End date must be strictly after the start date.";
+                    return reply;
+                }
+
+                if (request.EndDate <= DateTime.UtcNow)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.CreateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to create promotion: {request.Name} - Cannot create an already expired promotion"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Cannot create a promotion that has already expired.";
+                    return reply;
+                }
+
+                if (request.StartDate.Date < DateTime.UtcNow.Date)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.CreateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to create promotion: {request.Name} - StartDate cannot be in the past"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "The start date cannot be set in the past.";
+                    return reply;
+                }
+
                 if (await HasOverlappingPromotionAsync(request))
                 {
                     _context.SystemActionLogs.Add(new SystemActionLog
@@ -63,6 +111,7 @@ namespace Backend_ThriftFlowSystem.Services
                     reply.Data = "Overlapping promotion exists for the same product lot or category.";
                     return reply;
                 }
+
                 var promotion = new Promotion
                 {
                     Name = request.Name,
@@ -108,35 +157,84 @@ namespace Backend_ThriftFlowSystem.Services
             var reply = new ResultListReply();
             try
             {
-                if (await HasOverlappingPromotionAsync(request))
-                {
-                    _context.SystemActionLogs.Add(new SystemActionLog
-                    {
-                        EmployeeId = employeeId,
-                        ActionType = ActionTypes.CreateFail,
-                        TargetTable = "Promotions",
-                        Details = $"Failed to create promotion: {request.Name} - overlapping promotion exists for same target/date range"
-                    });
-                    await _context.SaveChangesAsync();
-
-                    reply.Result.ToErrorStatus();
-                    reply.Data = "Overlapping promotion exists for the same product lot or category.";
-                    return reply;
-                }
                 var promotion = await _context.Promotions.FindAsync(id);
                 if (promotion == null)
                 {
                     _context.SystemActionLogs.Add(new SystemActionLog
                     {
                         EmployeeId = employeeId,
-                        ActionType = ActionTypes.CreateFail,
+                        ActionType = ActionTypes.UpdateFail,
                         TargetTable = "Promotions",
-                        Details = $"Failed to create promotion: {request.Name} - overlapping promotion exists for same target/date range"
+                        Details = $"Failed to update promotion: {request.Name} - Promotion not found."
                     });
                     await _context.SaveChangesAsync();
 
                     reply.Result.ToErrorStatus();
                     reply.Data = "Promotion not found.";
+                    return reply;
+                }
+
+                if (request.EndDate <= request.StartDate)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.UpdateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to update promotion: {request.Name} - Invalid date range (EndDate is before or equal to StartDate)"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "End date must be strictly after the start date.";
+                    return reply;
+                }
+
+                if (request.StartDate.Date != promotion.StartDate.Date && request.StartDate.Date < DateTime.UtcNow.Date)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.UpdateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to update promotion: {request.Name} - Cannot change start date to a past date"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "You cannot change the start date to a past date.";
+                    return reply;
+                }
+
+                if (request.IsActive && request.EndDate <= DateTime.UtcNow)
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.UpdateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to update promotion: {request.Name} - Attempted to activate an expired promotion"
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Cannot activate an expired promotion. Please extend the End Date first.";
+                    return reply;
+                }
+
+                if (await HasOverlappingPromotionAsync(request, id))
+                {
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.UpdateFail,
+                        TargetTable = "Promotions",
+                        Details = $"Failed to update promotion: {request.Name} - overlapping promotion exists for same target/date range" // 👈 แก้ ActionType เป็น UpdateFail ใน Log
+                    });
+                    await _context.SaveChangesAsync();
+
+                    reply.Result.ToErrorStatus();
+                    reply.Data = "Overlapping promotion exists for the same product lot or category.";
                     return reply;
                 }
 
@@ -157,10 +255,10 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.SystemActionLogs.Add(new SystemActionLog
                 {
                     EmployeeId = employeeId,
-                    ActionType = ActionTypes.Create,
+                    ActionType = ActionTypes.Update,
                     TargetTable = "Promotions",
                     TargetRecordId = promotion.Id,
-                    Details = $"Created promotion: {promotion.Name} ({promotion.PromotionType})"
+                    Details = $"Update promotion: {promotion.Name} ({promotion.PromotionType})"
                 });
                 await _context.SaveChangesAsync();
 
@@ -176,7 +274,7 @@ namespace Backend_ThriftFlowSystem.Services
             return reply;
         }
 
-        public async Task<ResultListReply> DeletePromotionAsync(int id)
+        public async Task<ResultListReply> TogglePromotionActiveAsync(int id, int employeeId)
         {
             var reply = new ResultListReply();
             try
@@ -184,16 +282,62 @@ namespace Backend_ThriftFlowSystem.Services
                 var promotion = await _context.Promotions.FindAsync(id);
                 if (promotion == null)
                 {
+
+                    _context.SystemActionLogs.Add(new SystemActionLog
+                    {
+                        EmployeeId = employeeId,
+                        ActionType = ActionTypes.SoftDelete, 
+                        TargetTable = "Promotions",
+                        Details = $"Failed to delete promotion ID: {id} - Promotion not found."
+                    });
+                    await _context.SaveChangesAsync();
+
                     reply.Result.ToErrorStatus();
                     reply.Data = "Promotion not found.";
                     return reply;
                 }
 
+                if (!promotion.IsActive)
+                {
+                    if (promotion.EndDate <= DateTime.UtcNow)
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Cannot activate an expired promotion. Please extend the End Date first.";
+                        return reply;
+                    }
+
+                    var checkRequest = new PromotionRequestDto
+                    {
+                        StartDate = promotion.StartDate,
+                        EndDate = promotion.EndDate,
+                        ApplicableProductLotId = promotion.ApplicableProductLotId,
+                        ApplicableCategoryId = promotion.ApplicableCategoryId
+                    };
+
+                    if (await HasOverlappingPromotionAsync(checkRequest, id))
+                    {
+                        reply.Result.ToErrorStatus();
+                        reply.Data = "Overlapping promotion exists. Cannot activate.";
+                        return reply;
+                    }
+                }
                 
-                promotion.IsActive = false;
+                promotion.IsActive = !promotion.IsActive;
+
+                string statusText = promotion.IsActive ? "Activated" : "Deactivated";
+
+                _context.SystemActionLogs.Add(new SystemActionLog
+                {
+                    EmployeeId = employeeId,
+                    ActionType = promotion.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete,
+                    TargetTable = "Promotions",
+                    TargetRecordId = promotion.Id,
+                    Details = $"{statusText} promotion: {promotion.Name} ({promotion.PromotionType})"
+                });
+
                 await _context.SaveChangesAsync();
 
-                reply.Data = "Promotion deleted (deactivated) successfully.";
+                reply.Data = $"Promotion:{promotion.Name}({promotion.PromotionType}) is {statusText} successfully.";
                 reply.Result.ToSuccessStatus("200");
                 reply.ToSuccessStatus();
             }
