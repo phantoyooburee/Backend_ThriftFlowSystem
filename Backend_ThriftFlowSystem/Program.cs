@@ -13,6 +13,9 @@ using System.Text;
 using ThriftFlowSystem.Services;
 
 
+// Enable legacy timestamp behavior in Npgsql to prevent 'Cannot write DateTime with Kind=Unspecified to PostgreSQL type timestamp with time zone' globally
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Service CORS
@@ -83,7 +86,10 @@ builder.Services.AddScoped<IAuthenticateServices, AuthenticateServices>();
 builder.Services.AddScoped<IInventoryServices, InventoryServices>();
 builder.Services.AddScoped<IPOSServices, POSServices>();
 builder.Services.AddScoped<IPromotionServices, PromotionServices>();
-//builder.Services.AddScoped<IDashboardServices, DashboardServices>();
+builder.Services.AddScoped<IDashboardServices, DashboardServices>();
+//builder.Services.AddScoped<IGetSalesHistoryServices, GetSalesHistoryServices>();
+//builder.Services.AddScoped<IAuditLogServices, AuditLogServices>();
+//builder.Services.AddScoped<IStoreServices, StoreServices>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();

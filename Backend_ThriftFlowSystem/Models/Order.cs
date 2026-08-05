@@ -33,6 +33,12 @@ namespace Backend_ThriftFlowSystem.Models
         [MaxLength(50)]
         public string PaymentMethod { get; set; } = "CASH";
 
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? CashReceived { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? ChangeDue { get; set; }
+
         [MaxLength(500)]
         public string? PaymentSlipUrl { get; set; } 
 
@@ -56,6 +62,17 @@ namespace Backend_ThriftFlowSystem.Models
 
         public bool IsPromotionSkipped { get; set; } = false;
 
+        public int? BranchId { get; set; } 
+
+        [ForeignKey("BranchId")]
+        public Branch? Branch { get; set; }
+
+        public int? POSShiftId { get; set; }
+
+        [ForeignKey("POSShiftId")]
+        public POSShift? POSShift { get; set; }
+
         public ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+        public ICollection<Refund> Refunds { get; set; } = new List<Refund>();
     }
 }
