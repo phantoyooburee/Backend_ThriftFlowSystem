@@ -82,6 +82,23 @@ namespace Backend_ThriftFlowSystem.Controllers
             }
         }
 
+        [HttpGet("Employees")]
+        [Authorize(Roles ="Owner,Manager")]
+        public async Task<IActionResult> GerEmployees()
+        {
+            try
+            {
+                var result = await _authenServices.GetEmployeesAsync();
+
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
         [HttpPost("invite")]
         [Authorize(Roles = "Owner,Manager")]
         public async Task<IActionResult> InviteEmployee([FromBody] InviteEmployeeRequest request)
@@ -90,23 +107,11 @@ namespace Backend_ThriftFlowSystem.Controllers
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
                 var inviterIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (string.IsNullOrEmpty(inviterIdClaim) || !int.TryParse(inviterIdClaim, out int inviterId))
                 {
                     return Unauthorized(new { message = "Invalid token claims." });
                 }
-                if (roleClaim != "Owner" && roleClaim != "Manager")
-                {
-                    return StatusCode(403, new
-                    {
-                        success = false,
-                        message = "You do not have permission to invite employees. Access Denied."
-                    });
-                }
-                // ดึง Id ของคนที่กดเชิญ ออกมาจาก JWT Token
-                //var inviterIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                //int.TryParse(inviterIdClaim, out int inviterId);
 
                 var result = await _authenServices.InviteEmployeeAsync(request, inviterId);
                 int statusCode = _resultReply.MapReply(result);
@@ -182,7 +187,6 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPost("reset-password")]
         [AllowAnonymous]
-        
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
         {
             try
@@ -203,6 +207,184 @@ namespace Backend_ThriftFlowSystem.Controllers
             }
         }
 
+        [HttpPatch("profile")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile([FromBody] EmployeeUpdateRequest request)
+        {
+            try
+            {
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+
+                var result = await _authenServices.UpdateProfileAsync(employeeId, request);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("change-password")]
+        [Authorize]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        {
+            try
+            {
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+
+                var result = await _authenServices.ChangePasswordAsync(employeeId, request);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("reset-pin-with-password")]
+        [Authorize]
+        public async Task<IActionResult> ResetPinWithPassword([FromBody] ResetPinWithPasswordRequest request)
+        {
+            try
+            {
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+                var result = await _authenServices.ResetPinWithPasswordAsync(employeeId, request);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("change-pin")]
+        [Authorize]
+        public async Task<IActionResult> ChangePin([FromBody] ChagePinRequest request)
+        {
+            try
+            {
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+                var result = await _authenServices.ChangePinAsync(employeeId, request);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("admin-force-reset-pin/{employeeId}")]
+        [Authorize(Roles = "Owner,Manager")]
+        public async Task<IActionResult> AdminForceResetPin(int employeeId, [FromBody] AdminForceResetPinRequest request)
+        {
+            try
+            {
+                var adminIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(adminIdClaim, out int actorId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+                var result = await _authenServices.AdminForceResetPinAsync(employeeId, request, actorId);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("change-role/{employeeId}")]
+        [Authorize(Roles = "Owner,Manager")]
+        public async Task<IActionResult> ChangeRole(int employeeId, [FromBody] ChangeRoleRequest request)
+        {
+            try
+            {
+                var actorIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(actorIdClaim, out int actorId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                if (request == null)
+                    return BadRequest(new { error = "Request body is required." });
+                if (!ModelState.IsValid)
+                    return ValidationProblem(ModelState);
+                var result = await _authenServices.ChangeRoleAsync(employeeId, request, actorId);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
+        [HttpPatch("toggle-active/{employeeId}")]
+        [Authorize(Roles = "Owner,Manager")]
+        public async Task<IActionResult> ToggleEmployeeActive(int employeeId)
+        {
+            try
+            {
+                var actorIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(actorIdClaim, out int actorId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                var result = await _authenServices.ToggleEmployeeActiveAsync(employeeId, actorId);
+                int statusCode = _resultReply.MapReply(result);
+                return StatusCode(statusCode, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = ex.Message });
+            }
+        }
+
         [HttpPost("logout")]
         [Authorize] 
         public async Task<IActionResult> Logout()
@@ -212,10 +394,10 @@ namespace Backend_ThriftFlowSystem.Controllers
                 var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var emailClaim = User.FindFirst(ClaimTypes.Email)?.Value;
 
-                int empId = int.TryParse(employeeIdClaim, out int id) ? id : 0;
+                int employeeId = int.TryParse(employeeIdClaim, out int id) ? id : 0;
                 string empEmail = emailClaim ?? string.Empty;
 
-                var result = await _authenServices.LogoutAsync(empId, empEmail);
+                var result = await _authenServices.LogoutAsync(employeeId, empEmail);
 
                 int statusCode = _resultReply.MapReply(result);
                 return StatusCode(statusCode, result);
