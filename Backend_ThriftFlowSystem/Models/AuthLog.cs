@@ -16,8 +16,10 @@ namespace Backend_ThriftFlowSystem.Models
 
         public int? EmployeeId { get; set; }
 
+        public int? ActorId { get; set; }
+
         [MaxLength(100)]
-        public string? TargetEmail { get; set; } //email from Tage system, if available
+        public string? TargetEmail { get; set; } 
 
         [MaxLength(50)]
         public string? IPAddress { get; set; }
@@ -25,9 +27,12 @@ namespace Backend_ThriftFlowSystem.Models
         [MaxLength(500)]
         public string? UserAgent { get; set; } //such as browser info
 
-        public string? Details { get; set; } //additional info about the auth event
+        public string? Details { get; set; } 
 
         [ForeignKey("EmployeeId")]
         public Employee? Employee { get; set; }
+
+        [ForeignKey("ActorId")]
+        public Employee? ActorEmployee { get; set; }
     }
 }
