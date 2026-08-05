@@ -89,7 +89,7 @@ builder.Services.AddScoped<IPromotionServices, PromotionServices>();
 builder.Services.AddScoped<IDashboardServices, DashboardServices>();
 builder.Services.AddScoped<IGetSalesHistoryServices, GetSalesHistoryServices>();
 builder.Services.AddScoped<IAuditLogServices, AuditLogServices>();
-//builder.Services.AddScoped<IStoreServices, StoreServices>();
+builder.Services.AddScoped<IStoreServices, StoreServices>();
 //Swagger
 builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
