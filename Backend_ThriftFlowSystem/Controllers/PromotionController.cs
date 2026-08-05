@@ -3,10 +3,11 @@ using Backend_ThriftFlowSystem.Interfaces;
 using Backend_ThriftFlowSystem.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Backend_ThriftFlowSystem.Controllers
 {
-    [Route("api/controller")]
+    [Route("api/[controller]")]
     [ApiController]
     [Authorize]
     public class PromotionController : ControllerBase
@@ -38,11 +39,16 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPost("Promotions")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> CreatePromotion([FromBody] PromotionRequestDto request, int employeeId)
+        public async Task<IActionResult> CreatePromotion([FromBody] PromotionRequestDto request)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { message = "Invalid token claims." });
+                }
                 var result = await _promotionServices.CreatePromotionAsync(request, employeeId);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
@@ -54,11 +60,16 @@ namespace Backend_ThriftFlowSystem.Controllers
 
         [HttpPut("Promotions/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> UpdatePromotion(int id, [FromBody] PromotionRequestDto request, int employeeId)
+        public async Task<IActionResult> UpdatePromotion(int id, [FromBody] PromotionRequestDto request)
         {
             try
             {
                 if (!ModelState.IsValid) return BadRequest(ModelState);
+                var employeeIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { message = "Invalid token claims." });
+                }
                 var result = await _promotionServices.UpdatePromotionAsync(id, request, employeeId);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
@@ -68,13 +79,18 @@ namespace Backend_ThriftFlowSystem.Controllers
             }
         }
 
-        [HttpDelete("Promotions/{id}")]
+        [HttpPatch("Promotions/{id}")]
         [Authorize(Roles = "Owner,Manager")]
-        public async Task<IActionResult> DeletePromotion(int id)
+        public async Task<IActionResult> TogglePromotionActive(int id)
         {
             try
             {
-                var result = await _promotionServices.DeletePromotionAsync(id);
+                var employeeIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!int.TryParse(employeeIdClaim, out int employeeId))
+                {
+                    return Unauthorized(new { error = "Invalid token or user ID not found." });
+                }
+                var result = await _promotionServices.TogglePromotionActiveAsync(id, employeeId);
                 return StatusCode(_resultReply.MapReply(result), result);
             }
             catch (Exception ex)
