@@ -14,7 +14,6 @@ namespace Backend_ThriftFlowSystem.Models
         [Required]
         public int CategoryId { get; set; }
 
-
         [Required]
         public int ProductLotId { get; set; }
 

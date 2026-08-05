@@ -15,12 +15,13 @@ namespace Backend_ThriftFlowSystem.Services
 
     public static class ActionTypes
     {
+        public const string ProductCreated = "PRODUCT_CREATED";
         public const string InRestock = "IN_RESTOCK";
-        public const string OutDamage = "OUT_DAMAGE";
         public const string InAdjust = "IN_ADJUST";
-        public const string OutLoss = "OUT_LOSS";
         public const string InReturn = "IN_RETURN";
-        public const string Create = "CREATE";
+        public const string OutDamage = "OUT_DAMAGE";
+        public const string OutLoss = "OUT_LOSS";
+        public const string Create = "CREATE_SUCCESS";
         public const string CreateFail = "CREATE_FAIL";
         public const string Update = "UPDATE";
         public const string UpdateFail = "UPDATE_FAIL";
@@ -254,7 +255,7 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.SystemActionLogs.Add(new SystemActionLog
                 {
                     EmployeeId = employeeId,
-                    ActionType = category.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete, // ✅ ใช้ Constant
+                    ActionType = category.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete, 
                     TargetTable = "Categories",
                     TargetRecordId = id,
                     Details = $"Changed status of Category ID {id} {category.Name} ({category.Prefix}) to {statusText}"
@@ -475,7 +476,7 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.SystemActionLogs.Add(new SystemActionLog
                 {
                     EmployeeId = employeeId,
-                    ActionType = supplier.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete, // ✅
+                    ActionType = supplier.IsActive ? ActionTypes.Restore : ActionTypes.SoftDelete,
                     TargetTable = "Suppliers",
                     TargetRecordId = id,
                     Details = $"Changed status Suppliers ID {id} {supplier.Name}({supplier.ContactInfo}) to {statusText}"
@@ -961,7 +962,7 @@ namespace Backend_ThriftFlowSystem.Services
                 var log = new InventoryLog
                 {
                     EmployeeId = employeeId,
-                    ActionType = ActionTypes.InRestock,
+                    ActionType = ActionTypes.ProductCreated,
                     QuantityChanged = request.InitialQuantity,
                     Note = "Add Product to System",
                     Product = product
@@ -975,6 +976,17 @@ namespace Backend_ThriftFlowSystem.Services
                 _context.ProductLots.Update(productLot);
                 _context.Products.Add(product);
                 _context.InventoryLogs.Add(log);
+
+                await _context.SaveChangesAsync();
+
+                _context.SystemActionLogs.Add(new SystemActionLog
+                {
+                    EmployeeId = employeeId,
+                    ActionType = ActionTypes.Create,
+                    TargetTable = "Products",
+                    TargetRecordId = product.Id,
+                    Details = $"Created Product: {product.Name} (SKU: {product.SKU}) with Initial Quantity: {request.InitialQuantity}"
+                });
 
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -1085,20 +1097,21 @@ namespace Backend_ThriftFlowSystem.Services
                     await _supabase.Storage.From(AppConstants.StorageBucketProducts).Upload(ms.ToArray(), fileName, new Supabase.Storage.FileOptions { Upsert = false });
 
                     product.ImageUrl = _supabase.Storage.From(AppConstants.StorageBucketProducts).GetPublicUrl(fileName);
+                    string? oldFileNameToDelete = null;
+
                     if (!string.IsNullOrEmpty(oldImageUrl))
+                    {
+                        oldFileNameToDelete = oldImageUrl.Split("/storage/v1/object/public/product-images/").LastOrDefault();
+                    }
+                    await _context.SaveChangesAsync();
+                    if (!string.IsNullOrEmpty(oldFileNameToDelete))
                     {
                         try
                         {
-                            
-                            var oldFileName = oldImageUrl.Split("/storage/v1/object/public/product-images/").LastOrDefault();
-                            if (!string.IsNullOrEmpty(oldFileName))
-                            {
-                                await _supabase.Storage.From(AppConstants.StorageBucketProducts).Remove(new List<string> { oldFileName });
-                            }
+                            await _supabase.Storage.From(AppConstants.StorageBucketProducts).Remove(new List<string> { oldFileNameToDelete });
                         }
                         catch (Exception ex)
                         {
-                            
                             _logger.LogWarning(ex, $"Failed to delete old image from Supabase: {oldImageUrl}");
                         }
                     }
@@ -1245,21 +1258,21 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                // 🧠 2. ลอจิกแปลงเครื่องหมาย (Auto-Sign Logic)
+                
                 int actualQuantityChange = 0;
 
                 if (incomingAction == ActionTypes.InRestock || incomingAction == ActionTypes.InAdjust || incomingAction == ActionTypes.InReturn)
                 {
-                    // กลุ่มเข้า (IN): เติมของ / หาของเจอ -> บังคับเป็น "บวก"
+                   
                     actualQuantityChange = Math.Abs(request.Quantity);
                 }
                 else if (incomingAction == ActionTypes.OutDamage || incomingAction == ActionTypes.OutLoss)
                 {
-                    // กลุ่มออก (OUT): ของเสีย / ของหาย -> บังคับเป็น "ลบ"
+                    
                     actualQuantityChange = -Math.Abs(request.Quantity);
                 }
 
-                // ป้องกันหน้าบ้านยิงเลข 0 มาเล่นๆ
+                
                 if (actualQuantityChange == 0)
                 {
                     reply.Result.ToErrorStatus();
@@ -1267,20 +1280,19 @@ namespace Backend_ThriftFlowSystem.Services
                     return reply;
                 }
 
-                // 🧠 2. กฎเหล็กสินค้าชิ้นเดียว (Unique Item Constraint) - ตัวที่ใช้งานจริง!
+                
                 if (!product.IsGenericSKU && actualQuantityChange > 0)
                 {
-                    // ถ้าเป็นของชิ้นเดียว และกำลังจะ "เพิ่มสต๊อก" (รับคืน / หาเจอ)
-                    // เช็คว่าถ้ารวมกับของเดิมแล้วเกิน 1 ไหม
+
                     if (product.QuantityInStock + actualQuantityChange > 1)
                     {
                         reply.Result.ToErrorStatus();
-                        reply.Data = "Unique items (IsGenericSKU = false) cannot have a stock quantity greater than 1.";
+                        reply.Data = "Unique items cannot have a stock quantity greater than 1.";
                         return reply;
                     }
                 }
 
-                // เช็คการดึงของเพิ่มจาก Lot (จะทำเฉพาะตอนเพิ่มสต๊อกเท่านั้น)
+     
                 if (actualQuantityChange > 0 && product.ProductLot != null)
                 {
                     if ((product.ProductLot.AllocatedQuantity + actualQuantityChange) > product.ProductLot.ReceivedQuantity)
@@ -1293,12 +1305,12 @@ namespace Backend_ThriftFlowSystem.Services
 
                 int oldQuantity = product.QuantityInStock;
 
-                // อัปเดตตาราง Products ด้วย actualQuantityChange
+  
                 int rowsAffected = await _context.Database.ExecuteSqlInterpolatedAsync($@"
-            UPDATE ""Products""
-            SET ""QuantityInStock"" = ""QuantityInStock"" + {actualQuantityChange}
-            WHERE ""Id"" = {request.ProductId}
-            AND ""QuantityInStock"" + {actualQuantityChange} >= 0");
+                UPDATE ""Products""
+                SET ""QuantityInStock"" = ""QuantityInStock"" + {actualQuantityChange}
+                WHERE ""Id"" = {request.ProductId}
+                AND ""QuantityInStock"" + {actualQuantityChange} >= 0");
 
                 if (rowsAffected == 0)
                 {
@@ -1311,7 +1323,7 @@ namespace Backend_ThriftFlowSystem.Services
                 int newQuantity = product.QuantityInStock;
                 bool wasActive = product.IsActive;
 
-                // ลอจิก IsActive
+   
                 if (newQuantity <= 0)
                 {
                     product.IsActive = false;
@@ -1327,7 +1339,7 @@ namespace Backend_ThriftFlowSystem.Services
                     _context.Products.Update(product);
                 }
 
-                // หักของออกจากกระสอบ (กรณีเติมสต๊อก)
+
                 if (product.ProductLot != null && actualQuantityChange > 0)
                 {
                     product.ProductLot.AllocatedQuantity += actualQuantityChange;
@@ -1343,7 +1355,7 @@ namespace Backend_ThriftFlowSystem.Services
                 {
                     EmployeeId = employeeId,
                     ActionType = incomingAction,
-                    QuantityChanged = actualQuantityChange, // บันทึกค่าที่มีเครื่องหมาย +- ชัดเจน
+                    QuantityChanged = actualQuantityChange, 
                     Note = !string.IsNullOrWhiteSpace(request.Note) ? request.Note.Trim() : "Manual Stock Adjustment",
                     ProductId = product.Id
                 };

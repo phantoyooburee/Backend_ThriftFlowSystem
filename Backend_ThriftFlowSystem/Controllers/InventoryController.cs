@@ -107,7 +107,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPost("suppliers")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> CreateSupplier([FromBody] SupplierCreateRequest request)
         {
             try
@@ -123,7 +123,7 @@ namespace Backend_ThriftFlowSystem.Controllers
             }
         }
         [HttpPut("suppliers/{id}")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> UpdateSupplier(int id, [FromBody] SupplierUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
@@ -139,7 +139,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPatch("suppliers/{id}/toggle-active")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> ToggleSupplierActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
@@ -171,7 +171,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPost("product-lots")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> CreateProductLot([FromBody] ProductLotCreateRequest request)
         {
             try
@@ -188,7 +188,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPut("product-lots/{id}")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> UpdateProductLot(int id, [FromBody] ProductLotUpdateRequest request, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
@@ -204,7 +204,7 @@ namespace Backend_ThriftFlowSystem.Controllers
         }
 
         [HttpPatch("product-lots/{id}/toggle-active")]
-        [Authorize(Roles = "Owner,Manager")]
+        [Authorize(Roles = "Owner")]
         public async Task<IActionResult> ToggleProductLotActive(int id, [FromHeader(Name = "X-PIN")] string pin)
         {
             try
