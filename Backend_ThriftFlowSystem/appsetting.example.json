@@ -14,6 +14,10 @@
   "ConnectionStrings": {
     "DBContext": "Host=localhost;Port=5432;Database=ThriftFlowDb;Username=postgres;Password=YOUR_PASSWORD;"
   },
+  "Supabase": {
+    "Url": "YOUR_SUPABASE_URL",
+    "Key": "YOUR_SUPABASE_KEY"
+  },
   "App": {
     "BaseUrl": "http://localhost:5173"
   }
