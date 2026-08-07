@@ -1,6 +1,6 @@
 # ThriftFlow ระบบขายเเละจัดการร้านค้าเสื้อผ้ามือสอง — Backend
 
-> 🌐 **Language:** [English](README-en.md) | [ภาษาไทย](README.md)
+> **Language:** [English](README-en.md) | [ภาษาไทย](README.md)
 
 ระบบ Backend สำหรับ ThriftFlow ระบบจัดการร้านค้าเสื้อผ้ามือสอง (POS + Inventory Management + Sale Analytics) ด้วย ASP.NET Core (C#) , PostgreSQL(RDB), Supabase Storage(Blob) เป็นโปรเจกต์จบการศึกษาพัฒนาขึ้นเพื่อเเก้ปัญหาการจัดการร้านค้าเสื้อผ้ามือสองซึ่งมักมีสินค้าจำนวนมากที่ไม่ซ้ำกันในเเต่ละชิ้น และต้องการให้มีความสะดวกและมีประสิทธิภาพมากขึ้นในการจัดการ โดยจะเชื่อมต่อกับระบบจัดการร้านค้าเสื้อผ้ามือสอง (Frontend)
 
