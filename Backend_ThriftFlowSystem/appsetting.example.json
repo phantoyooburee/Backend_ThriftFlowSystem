@@ -5,7 +5,7 @@
     "Audience": "YOUR_AUDIRNCE",
     "ExpiresMinutes": 480
   },
-  "Email": {
+  "EmailOptions": {
     "Port": 587,
     "Password": "YOUR_EMAIL_PASSWORD",
     "Host": "smtp.gmail.com",
