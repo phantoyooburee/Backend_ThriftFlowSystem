@@ -6,6 +6,8 @@ Backend system for ThriftFlow, a Point of Sale (POS), Inventory Management, and 
 
 **Frontend repository:** [ThriftFlow-Frontend](https://github.com/phantoyooburee/Frontend_ThirftFlow.git)
 
+**Live Demo:** [https://thriftflow.vercel.app](https://thriftflow.vercel.app)
+
 ![.NET](https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
 ![C#](https://img.shields.io/badge/C%23-239120?style=for-the-badge&logo=csharp&logoColor=white)
 ![Entity Framework](https://img.shields.io/badge/Entity_Framework-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
